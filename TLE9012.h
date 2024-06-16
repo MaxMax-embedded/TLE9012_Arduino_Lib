@@ -40,6 +40,8 @@ SOFTWARE.
 #define WRITECOMMAND 0x80
 #define BROADCAST_ID 0x3F
 
+#define SOFT_MSB_FIRST //undef in case the hardware serial port can be configured to handle MSB First in Hardware
+
 typedef enum
 {
   isoUART_OK,
@@ -104,8 +106,9 @@ typedef struct
   uint16_t ext_temp_diag;
 
   uint8_t n_cells;
+  uint8_t n_temp_sensors;
 
-  ntc_config_t temperature_configs[5];
+  ntc_config_t sensorconfig;
 
   uint16_t cell_uv_flags;
   uint16_t cell_ov_flags;
@@ -173,6 +176,9 @@ typedef struct
 
     private:
 
+      tle9012_error_callbacks_t errorcallbacks;
+
+
       uint8_t crc8(uint8_t* buffer, uint16_t len);
       uint8_t crc3(uint8_t replyframe);
 
@@ -182,10 +188,14 @@ typedef struct
       void isoUARTReadRequest(uint8_t nodeID, uint8_t regaddress);     
       void isoUARTClearRXBUffer();
 
+      void mcuDelay(uint32_t delay_ms);
+
     public:
 
       uint16_t isoUARTtimeout;
       driver_status_t driverStatus;
+
+      tle9012_device_t devices[N_DEVICES];
 
 
       TLE9012();  //Constructor
@@ -205,7 +215,7 @@ typedef struct
       void readCellVoltages(uint8_t nodeID);
       void readTemperatures(uint8_t nodeID);
       void setNumberofCells(uint8_t nodeID, uint8_t n_cells);
-      void setNumberofTempSensors(uint8_t nodeID, uint8_t n_temp_sensors);
+      void setTempSensorsConfig(uint8_t nodeID, uint8_t n_temp_sensors,ntc_config_t sensorconfig);
 
       //Watchdog and Power state handling
       void activateSleep();
@@ -217,7 +227,7 @@ typedef struct
       uint16_t readICVersionandManufacturerID(uint8_t nodeID);
       void setNodeID(uint8_t oldID, uint8_t newID, uint8_t finalNode);
       void writeMailboxRegister(uint8_t nodeID, uint16_t value);
-      void readMailboxRegister(uint8_t nodeID);
+      uint16_t readMailboxRegister(uint8_t nodeID);
 
 
       //Error checking and handling
@@ -228,7 +238,7 @@ typedef struct
       //Round Robin Functions
 
       void setRoundRobinErrorHandling(uint8_t nodeID, uint16_t rr_sleep_interval, uint8_t rr_temp_measurement_interval, uint8_t n_errors);
-      void setRoundRobinConfig(uint8_t nodeID, uint8_t rr_counter, rr_error_mask_t errormask);
+      void setRoundRobinConfig(uint8_t nodeID, uint8_t rr_counter, uint8_t rr_sync, rr_error_mask_t errormask);
 
       //Cell Balancing Functions
 

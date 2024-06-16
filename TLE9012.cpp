@@ -33,7 +33,16 @@ Constructor for TLE9012 class. Unused for now
 */
 TLE9012::TLE9012()  //Constructor
 {
-
+  errorcallbacks.adc_error_callback = NULL;
+  errorcallbacks.balancing_error_overcurrent_callback = NULL;
+  errorcallbacks.balancing_error_undercurrent_callback = NULL;
+  errorcallbacks.external_temp_error_callback = NULL;
+  errorcallbacks.internal_IC_error_callback = NULL;
+  errorcallbacks.internal_temp_error_callback = NULL;
+  errorcallbacks.open_load_error_callback = NULL;
+  errorcallbacks.overvoltage_callback = NULL;
+  errorcallbacks.reg_crc_error_callback = NULL;
+  errorcallbacks.undevoltage_callback = NULL;
 }
 
 /*
@@ -90,21 +99,120 @@ void TLE9012::wakeUp()
   void TLE9012::readCellVoltages(uint8_t nodeID)
   {
 
+    if(nodeID > N_DEVICES)
+    {
+      return; //Early return if device number is to high
+    }
+
+    uint8_t deviceID = nodeID - 1;
+
+    if(nodeID == 0)
+      deviceID = 0;
+    else
+      deviceID = nodeID-1;
+    
+    writeRegisterSingle(nodeID, MEAS_CTRL, 0xEE61); //Trigger PCVM, BVM and SCVM with PBOFF
+    mcuDelay(5);
+
+    for(uint8_t n = 0; n < devices[deviceID].n_cells; n++)
+    {
+      (void) readRegisterSingle(nodeID, PCVM_0 + (11-devices[deviceID].n_cells + n), &devices[deviceID].cell_voltages[n]);
+    }
+
+    (void) readRegisterSingle(nodeID,BVM,&devices[deviceID].block_voltage);
+    (void) readRegisterSingle(nodeID,SCVM_HIGH,&devices[deviceID].scvm_high);
+    (void) readRegisterSingle(nodeID,SCVM_LOW,&devices[deviceID].scvm_low);
   }
 
   void TLE9012::readTemperatures(uint8_t nodeID)
   {
+    if(nodeID > N_DEVICES)
+    {
+      return; //Early return if device number is to high
+    }
 
+    uint8_t deviceID = nodeID - 1;
+
+    if(nodeID == 0)
+      deviceID = 0;
+    else
+      deviceID = nodeID-1;
+
+    (void) writeRegisterSingle(nodeID, MEAS_CTRL, 0x0080);
+    mcuDelay(5);
+    
+    for(uint8_t n = 0; n < devices[deviceID].n_temp_sensors; n++)
+    {
+      (void) readRegisterSingle(nodeID,EXT_TEMP0+n,&devices[deviceID].ntc_resistances[n]);
+    }
+    
   }
 
   void TLE9012::setNumberofCells(uint8_t nodeID, uint8_t n_cells)
   {
 
+    if(nodeID > N_DEVICES)
+    {
+      return; //Early return if device number is to high
+    }
+
+    uint8_t deviceID = nodeID - 1;
+
+    if(nodeID == 0)
+      deviceID = 0;
+    else
+      deviceID = nodeID-1;
+
+    devices[deviceID].n_cells = n_cells;
+
+    uint16_t cell_mask = 0;
+
+    for(uint8_t n = 0; n < n_cells; n++)
+    {
+      cell_mask |= 1<<(11-n);
+    }
+    
+    (void) writeRegisterSingle(nodeID,PART_CONFIG,cell_mask);
+    (void) writeRegisterSingle(nodeID,SCVM_CONFIG,cell_mask);
   }
 
-  void TLE9012::setNumberofTempSensors(uint8_t nodeID, uint8_t n_temp_sensors)
+  void TLE9012::setTempSensorsConfig(uint8_t nodeID, uint8_t n_temp_sensors,ntc_config_t sensorconfig)
   {
 
+    if(nodeID > N_DEVICES)
+    {
+      return; //Early return if device number is to high
+    }
+
+    uint8_t deviceID = nodeID - 1;
+
+    if(nodeID == 0)
+      deviceID = 0;
+    else
+      deviceID = nodeID-1;
+
+    devices[deviceID].n_temp_sensors = n_temp_sensors;
+    devices[deviceID].sensorconfig = sensorconfig;
+
+    uint16_t sens_conf = 0;
+    (void) readRegisterSingle(nodeID, TEMP_CONF,&sens_conf);
+
+    if(n_temp_sensors > 5)
+      n_temp_sensors = 5;
+
+    sens_conf &= 0x0FFF;
+    sens_conf |= n_temp_sensors << 12;
+
+    (void) writeRegisterSingle(nodeID, TEMP_CONF, sens_conf);
+
+    uint16_t avm_sensemask = 0;
+    for(uint8_t n = 0; n <n_temp_sensors; n++)
+    {
+      avm_sensemask |= 1<<(n+3);
+    }
+    avm_sensemask |= 0x7;
+
+    (void) writeRegisterSingle(nodeID, AVM_CONFIG, avm_sensemask);
   }
 
       //Watchdog and Power state handling
@@ -157,7 +265,7 @@ void TLE9012::wakeUp()
     (void) writeRegisterSingle(nodeID,MAILBOX,value);
   }
 
-  void TLE9012::readMailboxRegister(uint8_t nodeID)
+  uint16_t TLE9012::readMailboxRegister(uint8_t nodeID)
   {
     uint16_t id = 0;
     (void) readRegisterSingle(nodeID, MAILBOX, &id);
@@ -173,62 +281,145 @@ void TLE9012::wakeUp()
 
   void TLE9012::attachErrorHandler(tle9012_error_t errortype, void (*errorhandler)(uint8_t, uint16_t))
   {
-
+    switch(errortype)
+    {
+      case OVERVOLTAGE_ERROR:
+        errorcallbacks.overvoltage_callback = errorhandler;
+        break;
+      case UNDERVOLTAGE_ERROR:
+        errorcallbacks.undevoltage_callback = errorhandler;
+        break;
+      case ADC_ERROR:
+        errorcallbacks.adc_error_callback = errorhandler;
+        break;
+      case INTERNAL_IC_ERROR:
+        errorcallbacks.internal_IC_error_callback = errorhandler;
+        break;
+      case OPEN_LOAD_ERROR:
+        errorcallbacks.open_load_error_callback = errorhandler;
+        break;
+      case REG_CRC_ERROR:
+        errorcallbacks.reg_crc_error_callback = errorhandler;
+        break;
+      case EXTERNAL_TEMP_ERROR:
+        errorcallbacks.external_temp_error_callback = errorhandler;
+        break;
+      case INTERNAL_TEMP_ERROR:
+        errorcallbacks.internal_temp_error_callback = errorhandler;
+        break;
+      case BALANCING_UNDERCURRENT_ERROR:
+        errorcallbacks.balancing_error_undercurrent_callback = errorhandler;
+        break;
+      case BALANCING_OVERCURRENT_ERROR:
+        errorcallbacks.balancing_error_overcurrent_callback = errorhandler;
+        break;
+    }
   }
 
   void TLE9012::checkErrors(uint8_t nodeID)
   {
-
+    uint16_t gen_diag = 0;
+    readRegisterSingle(nodeID,GEN_DIAG,&gen_diag);
   }
 
       //Round Robin Functions
 
   void TLE9012::setRoundRobinErrorHandling(uint8_t nodeID, uint16_t rr_sleep_interval, uint8_t rr_temp_measurement_interval, uint8_t n_errors)
   {
+    rr_sleep_interval = (rr_sleep_interval&0x03FF)<<6;
+    rr_temp_measurement_interval = (rr_temp_measurement_interval&0x7)<<3;
+    n_errors = n_errors & 0x07;
 
+    (void) writeRegisterSingle(nodeID, RR_ERR_CNT, rr_sleep_interval | (uint16_t) rr_temp_measurement_interval | (uint16_t) n_errors);
+    
   }
 
-  void TLE9012::setRoundRobinConfig(uint8_t nodeID, uint8_t rr_counter, rr_error_mask_t errormask)
+  void TLE9012::setRoundRobinConfig(uint8_t nodeID, uint8_t rr_counter, uint8_t rr_sync, rr_error_mask_t errormask)
   {
+    uint16_t rr_cfg = (uint16_t) rr_counter & 0x7F;
+    rr_cfg |= (rr_sync & 0x1) << 7;
+    rr_cfg |= errormask.adc_error << 8;
+    rr_cfg |= errormask.open_load_error << 9;
+    rr_cfg |= errormask.external_termperature_error << 10;
+    rr_cfg |= errormask.internal_temperature_error << 11;
+    rr_cfg |= errormask.undervoltage_error << 12;
+    rr_cfg |= errormask.overvoltage_error << 13;
+    rr_cfg |= errormask.balancing_undercurrent_error << 14;
+    rr_cfg |= errormask.balancing_overcurrent_error << 15;
 
+    (void) writeRegisterSingle(nodeID, RR_CONFIG, rr_cfg);
   }
 
       //Cell Balancing Functions
 
   void TLE9012::setBalancingPWM(uint8_t nodeID, tle9012_balancing_pwm_t pwm_duty_cycle)
   {
-
+    (void) writeRegisterSingle(nodeID,BAL_PWM,pwm_duty_cycle);
   }
 
   void TLE9012::setBalancingCounter(uint8_t nodeID, uint8_t cell, uint8_t value)
   {
+    uint8_t regblock = cell/3;
+    cell = (cell%3)*5;
+    uint16_t val = (value & 0x1F)<<cell;
 
+    switch(regblock)
+    {
+      case 0:
+        (void) writeRegisterSingle(nodeID,BAL_CNT_0,val);
+        break;
+      case 1:
+        (void) writeRegisterSingle(nodeID,BAL_CNT_1,val);
+        break;
+      case 2:
+        (void) writeRegisterSingle(nodeID,BAL_CNT_2,val);
+        break;
+      case 3:
+        (void) writeRegisterSingle(nodeID,BAL_CNT_3,val);
+        break;
+    }
   }
 
   void TLE9012::startBalancing(uint8_t nodeID, uint16_t balancing_mask)
   {
-
+    (void) writeRegisterSingle(nodeID,BAL_SETTINGS,balancing_mask & 0x0FFF);
   }
 
       //Threshold set functions
   void TLE9012::setOvervoltageThreshold(uint8_t nodeID, uint16_t fault_threshold)
   {
-
+    uint16_t ol_ov_reg = 0;
+    (void) readRegisterSingle(nodeID,OL_OV_THR,&ol_ov_reg);
+    ol_ov_reg &= 0xFC00;
+    ol_ov_reg |= fault_threshold & 0x03FF;
+    (void) writeRegisterSingle(nodeID,OL_OV_THR,ol_ov_reg);
   }
 
   void TLE9012::setUndervoltageThreshold(uint8_t nodeID, uint16_t fault_threshold)
   {
-
+    uint16_t ol_uv_reg = 0;
+    (void) readRegisterSingle(nodeID,OL_UV_THR,&ol_uv_reg);
+    ol_uv_reg &= 0xFC00;
+    ol_uv_reg |= fault_threshold & 0x03FF;
+    (void) writeRegisterSingle(nodeID,OL_UV_THR,ol_uv_reg);
   }
 
   void TLE9012::setOpenLoadThresholdMax(uint8_t nodeID, uint8_t open_load_threshold)
   {
-
+    uint16_t ol_thr_max = 0;
+    (void) readRegisterSingle(nodeID,OL_OV_THR,&ol_thr_max);
+    ol_thr_max &= 0x03FF;
+    ol_thr_max |= ((uint16_t) open_load_threshold & 0x3F) << 10;
+    (void) writeRegisterSingle(nodeID,OL_OV_THR,ol_thr_max);
   }
 
   void TLE9012::setOpenLoadThresholdMin(uint8_t nodeID, uint8_t open_load_threshold)
   {
-
+    uint16_t ol_thr_min = 0;
+    (void) readRegisterSingle(nodeID,OL_UV_THR,&ol_thr_min);
+    ol_thr_min &= 0x03FF;
+    ol_thr_min |= ((uint16_t) open_load_threshold & 0x3F)<<10;
+    (void) writeRegisterSingle(nodeID,OL_UV_THR,ol_thr_min);
   }
 
   void TLE9012::setExternalTemperatureThreshold(uint8_t nodeID, uint16_t external_overtemperature_threshold)
@@ -238,12 +429,13 @@ void TLE9012::wakeUp()
 
   void TLE9012::setInternalTemperatureThreshold(uint8_t nodeID, uint16_t internal_overtemperature_threshold)
   {
-
+    (void) writeRegisterSingle(nodeID, INT_OT_WARN_CONF, (internal_overtemperature_threshold & 0x3FF));
   }
 
   void TLE9012::setBalancingCurrentThreshold(uint8_t nodeID, uint8_t overcurrent_threshold, uint8_t undercurrent_threshold)
   {
-
+    uint16_t bal_thr = (((uint16_t) undercurrent_threshold) << 8) | overcurrent_threshold;
+    (void) writeRegisterSingle(nodeID, BAL_CURR_THR, bal_thr);
   }
 
 
@@ -277,8 +469,9 @@ iso_uart_status_t TLE9012::readRegisterSingle(uint8_t nodeID, uint16_t regaddres
     return status;
   }
 
-  
+  #ifdef SOFT_MSB_FIRST
   msb_first_converter(&(response_buffer[4]),5);
+  #endif
   uint8_t crc = crc8(&response_buffer[4],5);
 
   *result = (((uint16_t) response_buffer[6])<<8) | ((uint16_t) response_buffer[7]);
@@ -319,7 +512,9 @@ iso_uart_status_t TLE9012::writeRegisterSingle(uint8_t nodeID, uint16_t regaddre
   }  
 
   //Check if reply frame was received correctly
+  #ifdef SOFT_MSB_FIRST
   msb_first_converter(&response_buffer[6],1);
+  #endif
   if(!crc3(response_buffer[6]))
   {
     status = isoUART_CRC_ERROR;
@@ -357,7 +552,9 @@ iso_uart_status_t TLE9012::readRegisterBroadcast(uint16_t regaddress, uint16_t* 
     return status;
   }
   
+  #ifdef SOFT_MSB_FIRST
   msb_first_converter(&response_buffer[4],N_DEVICES*5);
+  #endif
 
   for(uint8_t n = 0; n < N_DEVICES; n++)
   {
@@ -400,7 +597,10 @@ iso_uart_status_t TLE9012::writeRegisterBroadcast(uint16_t regaddress, uint16_t 
   }
 
   //Check if reply frame was received correctly
+  #ifdef SOFT_MSB_FIRST
   msb_first_converter(&response_buffer[6],1);
+  #endif
+
   if(!crc3(response_buffer[6]))
   {
     status = isoUART_CRC_ERROR;
@@ -412,12 +612,12 @@ iso_uart_status_t TLE9012::writeRegisterBroadcast(uint16_t regaddress, uint16_t 
 
 iso_uart_status_t TLE9012::configureMultiread(multiread_cfg_t cfg)  //Write a multiread configuration to all devices in the daisy chain
 {
-  return 0; //Multiread is unsuported for the moment
+  return isoUART_OK; //Multiread is unsuported for the moment
 }
 
 iso_uart_status_t TLE9012::multiRead(multread_result_t* databuffer) //Multiread command from all devices in the chain
 {
-  return 0; //Multiread is unsuported for the moment
+  return isoUART_OK; //Multiread is unsuported for the moment
 }
 
 //Private Functions start here
@@ -493,7 +693,9 @@ void TLE9012::isoUARTWriteRequest(uint8_t nodeID, uint8_t regaddress, uint16_t d
   writebuffer[5] = 0x00;
 
   writebuffer[5] = crc8(writebuffer,5);
+  #ifdef SOFT_MSB_FIRST
   msb_first_converter(writebuffer, 6);
+  #endif
 
   hisoUART->write(writebuffer,6);
 }
@@ -507,7 +709,9 @@ void TLE9012::isoUARTReadRequest(uint8_t nodeID, uint8_t regaddress)
   writebuffer[3] = 0x00;
 
   writebuffer[3] = crc8(writebuffer,3);
+  #ifdef SOFT_MSB_FIRST
   msb_first_converter(writebuffer, 4);
+  #endif
   hisoUART->write(writebuffer,4);
 }
 
@@ -515,4 +719,9 @@ void TLE9012::isoUARTClearRXBUffer()
 {
   while(hisoUART->available())
     uint8_t null = hisoUART->read();
+}
+
+void TLE9012::mcuDelay(uint32_t delay_ms)
+{
+  delay(delay_ms);
 }
