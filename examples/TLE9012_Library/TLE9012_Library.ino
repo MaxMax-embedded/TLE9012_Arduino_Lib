@@ -29,6 +29,9 @@ SOFTWARE.
 
 TLE9012 tle9012;
 
+ntc_config_t ntc_config = {.ntc_resistance=100000,.ntc_b_value=3000};
+
+
 void setup() {
   // put your setup code here, to run once:
   tle9012.init(&Serial2, 2000000,16,17);
@@ -36,34 +39,35 @@ void setup() {
   Serial.println("Boot completed");
   tle9012.wakeUp();
   delay(200);
-  tle9012.writeRegisterSingle(0, 0x01, 0x0FFF);
-  tle9012.writeRegisterSingle(0, 0x36, 0x0800);
+  tle9012.setExtendedWatchdog(0);
+  tle9012.setNodeID(0, 1, 1);
+  tle9012.writeMailboxRegister(1, 0xAA55);
+
+  uint16_t mailbox = tle9012.readMailboxRegister(1);
+  if(mailbox == 0xAA55)
+    Serial.println("Mailbox Check completed");
+
+  tle9012.setNumberofCells(1, 12);
+  tle9012.setTempSensorsConfig(1, 5, ntc_config);
+  uint16_t ptconf = 0;
+  tle9012.readRegisterSingle(1, 0x01, &ptconf);
+  Serial.println(ptconf);
 }
 
 void loop() {
-    iso_uart_status_t status = isoUART_OK;
-    uint16_t cellVoltages[12];
-  // put your main code here, to run repeatedly:
-  tle9012.wakeUp();
-  delay(5);
-  status = tle9012.writeRegisterBroadcast(0x3D, 0x007F);//Trigger WDT
-  tle9012.writeRegisterBroadcast(0x18, 0xEE61);
 
-  delay(5);
-  uint8_t errors = 0;
-  for(uint8_t n = 0; n < 12; n++)
+  // put your main code here, to run repeatedly:
+  tle9012.readTemperatures(1);
+  for(uint8_t n = 0; n < 5; n++)
   {
-   errors += (uint8_t) tle9012.readRegisterSingle(0, 0x19+n, &cellVoltages[n]);
-    
-    Serial.print("Cell Voltage: ");
+    Serial.println("-------------------------------------------");
+    Serial.print("Resistance ");
     Serial.print(n+1);
-    Serial.print(" is ");
-    Serial.print((float) 5*cellVoltages[n]/65536);
-    Serial.print(" V\n");
+    Serial.print(" : ");
+    Serial.print(tle9012.devices[0].ntc_resistances[n]);
+    Serial.print("\n");
+    Serial.println("-------------------------------------------");
   }
- 
-  Serial.print("Status: ");
-  Serial.println(status+errors);
-  delay(100);
+  delay(1000);
 
 }
