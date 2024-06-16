@@ -24,28 +24,38 @@ SOFTWARE.
 
 
 #include "TLE9012.h"
+#include "TLE9012_Makros.h"
 
 HardwareSerial* hisoUART;
 
-
+/*
+Constructor for TLE9012 class. Unused for now
+*/
 TLE9012::TLE9012()  //Constructor
 {
 
 }
 
-
+/*
+Destructor for TLE9012 class. Unused for now
+*/
 TLE9012::~TLE9012() //Destructor
 {
 
 }
       
 
+/*
+
+*/      
       
-      
-void TLE9012::init(HardwareSerial* serial, uint32_t baudrate=1000000)//Driver init
+void TLE9012::init(HardwareSerial* serial, uint32_t baudrate=1000000,uint8_t rxpin=0,uint8_t txpin=0)//Driver init
 {
   hisoUART = serial;
-  hisoUART->begin(baudrate,SERIAL_8N1,16,17);
+  if((rxpin != 0) && (txpin != 0))
+    hisoUART->begin(baudrate,SERIAL_8N1,rxpin,txpin);
+  else
+    hisoUART->begin(baudrate,SERIAL_8N1);
 }
 
 void TLE9012::wakeUp()
@@ -73,6 +83,170 @@ void TLE9012::wakeUp()
     }
   }
 }
+
+     //High Level Routines
+
+      //Measurement related functions
+  void TLE9012::readCellVoltages(uint8_t nodeID)
+  {
+
+  }
+
+  void TLE9012::readTemperatures(uint8_t nodeID)
+  {
+
+  }
+
+  void TLE9012::setNumberofCells(uint8_t nodeID, uint8_t n_cells)
+  {
+
+  }
+
+  void TLE9012::setNumberofTempSensors(uint8_t nodeID, uint8_t n_temp_sensors)
+  {
+
+  }
+
+      //Watchdog and Power state handling
+  void TLE9012::activateSleep()
+  {
+    (void) writeRegisterBroadcast(OP_MODE,0x0001); //Return is ignored for now
+  }
+
+  void TLE9012::resetWatchdog()
+  {
+    (void) writeRegisterBroadcast(WDOG_CNT,0x007F);
+  }
+
+  void TLE9012::setExtendedWatchdog(uint8_t nodeID)
+  {
+    uint16_t op_mode_reg = 0;
+    (void) readRegisterSingle(nodeID, OP_MODE, &op_mode_reg);
+    op_mode_reg |= 0x0002;
+    (void) writeRegisterSingle(nodeID, OP_MODE, op_mode_reg);
+  }
+
+  void TLE9012::clearExtendedWatchdog(uint8_t nodeID)
+  {
+    uint16_t op_mode_reg = 0;
+    (void) readRegisterSingle(nodeID, OP_MODE, &op_mode_reg);
+    op_mode_reg &= 0xFFFD;
+    (void) writeRegisterSingle(nodeID, OP_MODE, op_mode_reg);
+  }
+
+      //Miscallanious stuff
+  uint16_t TLE9012::readICVersionandManufacturerID(uint8_t nodeID)
+  {
+    uint16_t id = 0;
+    (void) readRegisterSingle(nodeID, ICVID, &id);
+    return id;
+  }
+
+  void TLE9012::setNodeID(uint8_t oldID, uint8_t newID, uint8_t finalNode)
+  {
+    uint16_t cfg;
+    (void) readRegisterSingle(oldID,CONFIG,&cfg);
+    cfg &= 0x07C0;
+    cfg |= newID & 0x3F;
+    cfg |= finalNode<<11;
+    (void) writeRegisterSingle(oldID,CONFIG,cfg);
+  }
+
+  void TLE9012::writeMailboxRegister(uint8_t nodeID, uint16_t value)
+  {
+    (void) writeRegisterSingle(nodeID,MAILBOX,value);
+  }
+
+  void TLE9012::readMailboxRegister(uint8_t nodeID)
+  {
+    uint16_t id = 0;
+    (void) readRegisterSingle(nodeID, MAILBOX, &id);
+    return id;
+  }
+
+
+      //Error checking and handling
+  void TLE9012::checkDiagnoseResistor(uint8_t nodeID)
+  {
+
+  }
+
+  void TLE9012::attachErrorHandler(tle9012_error_t errortype, void (*errorhandler)(uint8_t, uint16_t))
+  {
+
+  }
+
+  void TLE9012::checkErrors(uint8_t nodeID)
+  {
+
+  }
+
+      //Round Robin Functions
+
+  void TLE9012::setRoundRobinErrorHandling(uint8_t nodeID, uint16_t rr_sleep_interval, uint8_t rr_temp_measurement_interval, uint8_t n_errors)
+  {
+
+  }
+
+  void TLE9012::setRoundRobinConfig(uint8_t nodeID, uint8_t rr_counter, rr_error_mask_t errormask)
+  {
+
+  }
+
+      //Cell Balancing Functions
+
+  void TLE9012::setBalancingPWM(uint8_t nodeID, tle9012_balancing_pwm_t pwm_duty_cycle)
+  {
+
+  }
+
+  void TLE9012::setBalancingCounter(uint8_t nodeID, uint8_t cell, uint8_t value)
+  {
+
+  }
+
+  void TLE9012::startBalancing(uint8_t nodeID, uint16_t balancing_mask)
+  {
+
+  }
+
+      //Threshold set functions
+  void TLE9012::setOvervoltageThreshold(uint8_t nodeID, uint16_t fault_threshold)
+  {
+
+  }
+
+  void TLE9012::setUndervoltageThreshold(uint8_t nodeID, uint16_t fault_threshold)
+  {
+
+  }
+
+  void TLE9012::setOpenLoadThresholdMax(uint8_t nodeID, uint8_t open_load_threshold)
+  {
+
+  }
+
+  void TLE9012::setOpenLoadThresholdMin(uint8_t nodeID, uint8_t open_load_threshold)
+  {
+
+  }
+
+  void TLE9012::setExternalTemperatureThreshold(uint8_t nodeID, uint16_t external_overtemperature_threshold)
+  {
+
+  }
+
+  void TLE9012::setInternalTemperatureThreshold(uint8_t nodeID, uint16_t internal_overtemperature_threshold)
+  {
+
+  }
+
+  void TLE9012::setBalancingCurrentThreshold(uint8_t nodeID, uint8_t overcurrent_threshold, uint8_t undercurrent_threshold)
+  {
+
+  }
+
+
       
       //Low Level Routines for direct register Access
 iso_uart_status_t TLE9012::readRegisterSingle(uint8_t nodeID, uint16_t regaddress, uint16_t* result)
@@ -143,6 +317,14 @@ iso_uart_status_t TLE9012::writeRegisterSingle(uint8_t nodeID, uint16_t regaddre
     status = isoUART_TIMEOUT;
     return status;
   }  
+
+  //Check if reply frame was received correctly
+  msb_first_converter(&response_buffer[6],1);
+  if(!crc3(response_buffer[6]))
+  {
+    status = isoUART_CRC_ERROR;
+    return status;
+  }
 
   return status;
 }
@@ -217,20 +399,55 @@ iso_uart_status_t TLE9012::writeRegisterBroadcast(uint16_t regaddress, uint16_t 
     return status;
   }
 
+  //Check if reply frame was received correctly
+  msb_first_converter(&response_buffer[6],1);
+  if(!crc3(response_buffer[6]))
+  {
+    status = isoUART_CRC_ERROR;
+    return status;
+  }
+
   return status;
 }
 
 iso_uart_status_t TLE9012::configureMultiread(multiread_cfg_t cfg)  //Write a multiread configuration to all devices in the daisy chain
 {
-
+  return 0; //Multiread is unsuported for the moment
 }
 
 iso_uart_status_t TLE9012::multiRead(multread_result_t* databuffer) //Multiread command from all devices in the chain
 {
-
+  return 0; //Multiread is unsuported for the moment
 }
 
 //Private Functions start here
+
+/*
+  Calculate the CRC-3 of the reply Frame
+  returns 1 if crc is correct and 0 if crc is false
+*/
+uint8_t TLE9012::crc3(uint8_t replyframe)
+{
+    uint8_t polynomial = 0xB0;
+    uint8_t crc = replyframe;
+    
+    for(uint8_t n = 0; n < 5; n++)
+    {
+        if(crc & 0x80)
+        {
+            crc = crc^polynomial;
+            crc = crc << 1;
+        }
+        else
+            crc = crc << 1;
+    }
+    
+    if(crc == 0)
+        return 1;
+    else
+        return 0;
+}
+
 uint8_t TLE9012::crc8(uint8_t* buffer, uint16_t len)
 {
   const uint8_t polynomial = 0x1D;
