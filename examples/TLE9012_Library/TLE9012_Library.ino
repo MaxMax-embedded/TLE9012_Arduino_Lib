@@ -31,7 +31,7 @@ TLE9012 tle9012;
 
 void setup() {
   // put your setup code here, to run once:
-  tle9012.init(&Serial2, 2000000);
+  tle9012.init(&Serial2, 2000000,16,17);
   Serial.begin(115200);
   Serial.println("Boot completed");
   tle9012.wakeUp();
