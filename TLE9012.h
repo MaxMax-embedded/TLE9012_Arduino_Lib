@@ -158,8 +158,23 @@ typedef struct
 
 typedef struct
 {
+  uint8_t err_pin : 1;
+  uint8_t adc_error : 1;
+  uint8_t open_load_error : 1;
+  uint8_t int_ic_err : 1;
+  uint8_t reg_crc_err : 1;
+  uint8_t external_termperature_error : 1;
+  uint8_t internal_temperature_error : 1;
+  uint8_t undervoltage_error : 1;
+  uint8_t overvoltage_error : 1;
+  uint8_t balancing_undercurrent_error : 1;
+  uint8_t balancing_overcurrent_error : 1;
+} err_emm_error_mask_t;
+
+typedef struct
+{
   void (*overvoltage_callback)(uint8_t nodeID, uint16_t ov_flags);
-  void (*undevoltage_callback)(uint8_t nodeID, uint16_t uv_flags);
+  void (*undervoltage_callback)(uint8_t nodeID, uint16_t uv_flags);
   void (*adc_error_callback)(uint8_t nodeID, uint16_t filler);
   void (*internal_IC_error_callback)(uint8_t nodeID, uint16_t filler);
   void (*open_load_error_callback)(uint8_t nodeID, uint16_t diag_ol);
@@ -168,6 +183,7 @@ typedef struct
   void (*internal_temp_error_callback)(uint8_t nodeID, uint16_t internal_temp);
   void (*balancing_error_undercurrent_callback)(uint8_t nodeID, uint16_t bal_diag_uc);
   void (*balancing_error_overcurrent_callback)(uint8_t nodeID,uint16_t bal_diag_ov);
+  void (*ps_error_sleep_callback)(uint8_t nodeID, uint16_t filler);
 
 } tle9012_error_callbacks_t;
 
@@ -234,6 +250,8 @@ typedef struct
       void checkDiagnoseResistor(uint8_t nodeID);
       void attachErrorHandler(tle9012_error_t errortype, void (*errorhandler)(uint8_t, uint16_t));
       void checkErrors(uint8_t nodeID);
+      void resetErrors(uint8_t nodeID);
+      void configFaultMasks(uint8_t nodeID, err_emm_error_mask_t err_mask);
 
       //Round Robin Functions
 

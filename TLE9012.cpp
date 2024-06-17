@@ -42,7 +42,8 @@ TLE9012::TLE9012()  //Constructor
   errorcallbacks.open_load_error_callback = NULL;
   errorcallbacks.overvoltage_callback = NULL;
   errorcallbacks.reg_crc_error_callback = NULL;
-  errorcallbacks.undevoltage_callback = NULL;
+  errorcallbacks.undervoltage_callback = NULL;
+  errorcallbacks.ps_error_sleep_callback = NULL;
 }
 
 /*
@@ -287,7 +288,7 @@ void TLE9012::wakeUp()
         errorcallbacks.overvoltage_callback = errorhandler;
         break;
       case UNDERVOLTAGE_ERROR:
-        errorcallbacks.undevoltage_callback = errorhandler;
+        errorcallbacks.undervoltage_callback = errorhandler;
         break;
       case ADC_ERROR:
         errorcallbacks.adc_error_callback = errorhandler;
@@ -319,9 +320,114 @@ void TLE9012::wakeUp()
   void TLE9012::checkErrors(uint8_t nodeID)
   {
     uint16_t gen_diag = 0;
-    readRegisterSingle(nodeID,GEN_DIAG,&gen_diag);
+    (void) readRegisterSingle(nodeID,GEN_DIAG,&gen_diag);
+    
+    if(gen_diag & 0x8000)
+    {
+      uint16_t balancing_oc_flags = 0;
+      (void) readRegisterSingle(nodeID,BAL_DIAG_OC,&balancing_oc_flags);
+      if(errorcallbacks.balancing_error_overcurrent_callback != NULL)
+        errorcallbacks.balancing_error_overcurrent_callback(nodeID,balancing_oc_flags);
+    }
+
+    if(gen_diag & 0x4000)
+    {
+      uint16_t balancing_uc_flags = 0;
+      (void) readRegisterSingle(nodeID,BAL_DIAG_UC,&balancing_uc_flags);
+      if(errorcallbacks.balancing_error_undercurrent_callback != NULL)
+        errorcallbacks.balancing_error_undercurrent_callback(nodeID,balancing_uc_flags);
+    }
+
+    if(gen_diag & 0x2000)
+    {
+      uint16_t cell_ov_diag = 0;
+      (void) readRegisterSingle(nodeID,CELL_OV,&cell_ov_diag);
+      if(errorcallbacks.overvoltage_callback != NULL)
+        errorcallbacks.overvoltage_callback(nodeID,cell_ov_diag);
+    }
+
+    if(gen_diag & 0x1000)
+    {
+      uint16_t cell_uv_diag = 0;
+      (void) readRegisterSingle(nodeID,CELL_UV,&cell_uv_diag);
+      if(errorcallbacks.undervoltage_callback != NULL)
+        errorcallbacks.undervoltage_callback(nodeID,cell_uv_diag);
+    }
+
+    if(gen_diag & 0x0800)
+    {
+      uint16_t overtemp = 0;
+      (void) readRegisterSingle(nodeID,INT_TEMP,&overtemp);
+      if(errorcallbacks.internal_temp_error_callback != NULL)
+        errorcallbacks.internal_temp_error_callback(nodeID,overtemp);
+    }
+
+    if(gen_diag & 0x0400)
+    {
+      uint16_t ext_temp_err = 0;
+      (void) readRegisterSingle(nodeID,EXT_TEMP_DIAG,&ext_temp_err);
+      if(errorcallbacks.external_temp_error_callback != NULL)
+        errorcallbacks.external_temp_error_callback(nodeID,ext_temp_err);
+    }
+
+    if(gen_diag & 0x0200)
+    {
+      uint16_t reg_crc = 0;
+      (void) readRegisterSingle(nodeID,REG_CRC_ERR,&reg_crc);
+      if(errorcallbacks.reg_crc_error_callback != NULL)
+        errorcallbacks.reg_crc_error_callback(nodeID,reg_crc);
+    }
+
+    if(gen_diag & 0x0100)
+    {
+      uint16_t ic_error = 0;
+      if(errorcallbacks.internal_IC_error_callback != NULL)
+        errorcallbacks.internal_IC_error_callback(nodeID,0x0000);
+    }
+
+    if(gen_diag & 0x0080)
+    {
+      uint16_t open_load = 0;
+      (void) readRegisterSingle(nodeID,DIAG_OL,&open_load);
+      if(errorcallbacks.open_load_error_callback != NULL)
+        errorcallbacks.open_load_error_callback(nodeID,open_load);
+    }
+
+    if(gen_diag & 0x0040)
+    {
+      if(errorcallbacks.adc_error_callback != NULL)
+        errorcallbacks.adc_error_callback(nodeID,0x0000);
+    }
+
+    if(gen_diag & 0x0020)
+    {
+      if(errorcallbacks.ps_error_sleep_callback != NULL)
+        errorcallbacks.ps_error_sleep_callback(nodeID,0x0000);
+    }
   }
 
+  void TLE9012::resetErrors(uint8_t nodeID)
+  {
+    (void) writeRegisterSingle(nodeID,GEN_DIAG,0x0000);
+  }
+      
+  void TLE9012::configFaultMasks(uint8_t nodeID, err_emm_error_mask_t err_mask)
+  {
+    uint16_t errormask = 0;
+    errormask |= err_mask.balancing_overcurrent_error<<15;
+    errormask |= err_mask.balancing_undercurrent_error<<14;
+    errormask |= err_mask.overvoltage_error << 13;
+    errormask |= err_mask.undervoltage_error << 12;
+    errormask |= err_mask.internal_temperature_error << 11;
+    errormask |= err_mask.external_termperature_error << 10;
+    errormask |= err_mask.reg_crc_err << 9;
+    errormask |= err_mask.int_ic_err << 8;
+    errormask |= err_mask.open_load_error << 7;
+    errormask |= err_mask.adc_error << 6;
+    errormask |= err_mask.err_pin << 5;
+
+    (void) writeRegisterSingle(nodeID,FAULT_MASK,errormask);
+  }
       //Round Robin Functions
 
   void TLE9012::setRoundRobinErrorHandling(uint8_t nodeID, uint16_t rr_sleep_interval, uint8_t rr_temp_measurement_interval, uint8_t n_errors)
