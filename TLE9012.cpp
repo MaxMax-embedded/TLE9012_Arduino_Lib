@@ -26,10 +26,16 @@ SOFTWARE.
 #include "TLE9012.h"
 #include "TLE9012_Makros.h"
 
-HardwareSerial* hisoUART;
+HardwareSerial* hisoUART; //Pointer to the Hardware Serial Driver
 
-/*
-Constructor for TLE9012 class. Unused for now
+
+
+//-----------------------------------------------------------------------------
+//                         Initilization Functions
+//-----------------------------------------------------------------------------
+
+/**
+* Constructor for TLE9012 class. Unused for now
 */
 TLE9012::TLE9012()  //Constructor
 {
@@ -46,8 +52,8 @@ TLE9012::TLE9012()  //Constructor
   errorcallbacks.ps_error_sleep_callback = NULL;
 }
 
-/*
-Destructor for TLE9012 class. Unused for now
+/**
+* Destructor for TLE9012 class. Unused for now
 */
 TLE9012::~TLE9012() //Destructor
 {
@@ -55,8 +61,16 @@ TLE9012::~TLE9012() //Destructor
 }
       
 
-/*
-
+/**
+* @brief initialization Method
+*
+* Call this function before making any other calls to library functions. The Hardwareserial port is also initilized here
+* @note only Hardware Serial should be used because the response from the TLE9012 comes in at high baudrates
+*
+* @param serial pointer to a Serial handler class/struct
+* @param baudrate Baudrate of the Serialport -> must be between 1Mbit and 2Mbits
+* @param rxpin optional parameter to specify RX Pin under some architectures
+* @param txpin optional parameter to specify TX Pin under some architectures
 */      
       
 void TLE9012::init(HardwareSerial* serial, uint32_t baudrate=1000000,uint8_t rxpin=0,uint8_t txpin=0)//Driver init
@@ -67,6 +81,12 @@ void TLE9012::init(HardwareSerial* serial, uint32_t baudrate=1000000,uint8_t rxp
   else
     hisoUART->begin(baudrate,SERIAL_8N1);
 }
+
+/**
+* @brief Wakeup all TLE9012 devices on the Bus
+*
+* This function sends a wakeup signal across the daisy chain which is forwarded by all TLE9012/9015 devices
+*/
 
 void TLE9012::wakeUp()
 {
@@ -94,9 +114,19 @@ void TLE9012::wakeUp()
   }
 }
 
-     //High Level Routines
-
-      //Measurement related functions
+  //---------------------------------------------------------------------------
+  //                       Functions to Configure and Perform Measurements
+  //---------------------------------------------------------------------------
+  
+  
+  /**
+  * @brief Performs cell voltage measurements for a given Device in the Daisy Chain
+  *
+  * This function performs cell voltage measurements for all configured cells of a device with a given nodeID.
+  * The results are stored in the devices[nodeID-1].cell_voltages[] array. 
+  *
+  * @param nodeID is the address of the node on the daisy chain
+  */
   void TLE9012::readCellVoltages(uint8_t nodeID)
   {
 
@@ -125,6 +155,14 @@ void TLE9012::wakeUp()
     (void) readRegisterSingle(nodeID,SCVM_LOW,&devices[deviceID].scvm_low);
   }
 
+  /**
+  * @brief Performs NTC/PTC resistance measurements for a given Device in the Daisy Chain
+  *
+  * This function performs NTC/PTC resistance measurements for all configured Temperature channels of a device with a given nodeID.
+  * The results are stored in the devices[nodeID-1].ntc_resistances[] array
+  *
+  * @param nodeID is the address of the node on the daisy chain
+  */
   void TLE9012::readTemperatures(uint8_t nodeID)
   {
     if(nodeID > N_DEVICES)
@@ -148,7 +186,17 @@ void TLE9012::wakeUp()
     }
     
   }
-
+  
+  /**
+  * @brief configure number of cells for device with address nodeID
+  *
+  * This function configures the ADCs in the device with address nodeID to only measure and monitor a given number of cells. If
+  * fever than 12 cells are used, the channels next to GND shall be shorted on the TLE9012 Board but cell numbers will still start from
+  * 0 to n_cells for all arrays inside of this driver.
+  *
+  * @param nodeID is the address of the node on the daisy chain
+  * @param n_cells is the number of cells that are connected to the TLE9012 (max. 12)
+  */
   void TLE9012::setNumberofCells(uint8_t nodeID, uint8_t n_cells)
   {
 
@@ -177,7 +225,18 @@ void TLE9012::wakeUp()
     (void) writeRegisterSingle(nodeID,SCVM_CONFIG,cell_mask);
   }
 
-  void TLE9012::setTempSensorsConfig(uint8_t nodeID, uint8_t n_temp_sensors,ntc_config_t sensorconfig)
+/**
+* @brief configure number and configuration of temperature sensors
+*
+* This function configures the Temperature measurement unit in the device with address nodeID. Note that different
+* senorconfig structs can be used for different boards but only one can be used per board. This is no hardware limitation
+* but instead a limitation by this driver at the moment
+*
+* @param nodeID is the address of the node on the daisy chain
+* @param n_temp_sensors is the number of temperature sensors that shall be used
+* @param sensorconfig ntc_config_t struct that holds nominal resistance and beta value of the NTCs used
+*/
+  void TLE9012::setTempSensorsConfig(uint8_t nodeID, uint8_t n_temp_sensors, ntc_config_t sensorconfig)
   {
 
     if(nodeID > N_DEVICES)
@@ -215,17 +274,45 @@ void TLE9012::wakeUp()
 
     (void) writeRegisterSingle(nodeID, AVM_CONFIG, avm_sensemask);
   }
-
-      //Watchdog and Power state handling
+ 
+ 
+  //---------------------------------------------------------------------------
+  //                       Watchdog and Powermode Functions
+  //---------------------------------------------------------------------------
+  
+  
+  /**
+   * @brief Activate Sleep mode for all devices in the daisy chain
+   * 
+   * Powers down all devices on the daisy chain
+   * 
+   */
   void TLE9012::activateSleep()
   {
     (void) writeRegisterBroadcast(OP_MODE,0x0001); //Return is ignored for now
   }
 
+  /**
+   * @brief Reset Watchdog Timer to maximum value
+   * 
+   * Resets the watchdog timer register to 0x7F on all devices in the daisy chain
+   * 
+   */
+
   void TLE9012::resetWatchdog()
   {
     (void) writeRegisterBroadcast(WDOG_CNT,0x007F);
   }
+
+  /**
+   * @brief Changes the watchdog mode from normal to extended mode
+   * 
+   * In normal mode the watchdog times out after approximatly 2s which might be undesireable during inital configuration or
+   * some other reasons. Therefore the watchdog mode can be set to extended leading to a timeout after approx. 37 hours. Note
+   * that it's not recommended to use the extended mode during normal operation
+   * 
+   * @param nodeID is the address of the device on the daisy chain
+   */
 
   void TLE9012::setExtendedWatchdog(uint8_t nodeID)
   {
@@ -235,6 +322,14 @@ void TLE9012::wakeUp()
     (void) writeRegisterSingle(nodeID, OP_MODE, op_mode_reg);
   }
 
+  /**
+   * @brief Set watchdog to normal operation mode
+   * 
+   * This function resets the watchdog mode from extended to normal. For a more detailled explanation see setExtendedWatchdog
+   * 
+   * @param nodeID is the address of the device on the daisy chain
+   */
+
   void TLE9012::clearExtendedWatchdog(uint8_t nodeID)
   {
     uint16_t op_mode_reg = 0;
@@ -243,13 +338,37 @@ void TLE9012::wakeUp()
     (void) writeRegisterSingle(nodeID, OP_MODE, op_mode_reg);
   }
 
-      //Miscallanious stuff
+ 
+  //---------------------------------------------------------------------------
+  //                       Miscellaneous Functions 
+  //---------------------------------------------------------------------------
+  
+/**
+ * @brief Read IC and Manufacturing ID
+ * 
+ * @param nodeID is the address of the node on the daisy chain
+ * @return uint16_t id -> IC and Manufacturer Version ID. Should return 0xC140 according to user manual
+ */
+
   uint16_t TLE9012::readICVersionandManufacturerID(uint8_t nodeID)
   {
     uint16_t id = 0;
     (void) readRegisterSingle(nodeID, ICVID, &id);
     return id;
   }
+
+/**
+ * @brief Assign new nodeID to a device in the daisychain
+ * 
+ *  After reset all devices on the daisy chain start with nodeID 0 and will not forward messages until a non zero node ID is
+ *  assigned. During enumeration this function can be used to assign new nodeIDs(device addresses) using subsequent calls with
+ *  oldID = 0 and newID = 1..N. The finalNode parameter has to be set for the last element in the daisy chain to ensure that
+ *  a reply frame is send in response to a broadcast command
+ * 
+ * @param oldID is the current nodeID of the device
+ * @param newID is the new nodeID of the device
+ * @param finalNode is 0 if the device is not the final element in the daisy chain and 1 if the device is the final element
+ */
 
   void TLE9012::setNodeID(uint8_t oldID, uint8_t newID, uint8_t finalNode)
   {
@@ -261,10 +380,28 @@ void TLE9012::wakeUp()
     (void) writeRegisterSingle(oldID,CONFIG,cfg);
   }
 
+/**
+ * @brief Write a value to the mailbox register
+ * 
+ *  The mailbox register is a voltaile storage register which can be used to verify read and write access working correctly
+ * 
+ * @param nodeID is the address of the node on the daisy chain
+ * @param value is the value that shall be written into the mailbox register
+ */
+
   void TLE9012::writeMailboxRegister(uint8_t nodeID, uint16_t value)
   {
     (void) writeRegisterSingle(nodeID,MAILBOX,value);
   }
+
+/**
+ * @brief Reads the current value in the mailbox register
+ * 
+ *  Read Wrapper for the mailbox register to ensure read access is working correctly
+ * 
+ * @param nodeID is the address of the node on the daisy chain
+ * @return uint16_t is the value currently stored in the mailbox register
+ */
 
   uint16_t TLE9012::readMailboxRegister(uint8_t nodeID)
   {
@@ -273,12 +410,28 @@ void TLE9012::wakeUp()
     return id;
   }
 
+  //---------------------------------------------------------------------------
+  //                       Error Checking and Handling 
+  //---------------------------------------------------------------------------
 
-      //Error checking and handling
   void TLE9012::checkDiagnoseResistor(uint8_t nodeID)
   {
-
+    //Not implemented yet
   }
+
+
+  /**
+   * @brief Attach an error handler function that is called if something goes wrong
+   * 
+   * This function allows you to register your own errorhandler that gets called if the checkErrors function is detecting
+   * an error. The available types of errors are defined in the tle9012_error_t enum and cover all error that are described in
+   * the General Diagnosis register. All errorhandler functions take a nodeID as well as a uint16_t additional parameter as arguments. 
+   * The additional arguments usually include the associated errorflag registers. If no associate register exists, a filler value is
+   * used. 
+   * 
+   * @param errortype is the type of error that the handler is for 
+   * @param errorhandler is a function pointer to the errorhandler
+   */
 
   void TLE9012::attachErrorHandler(tle9012_error_t errortype, void (*errorhandler)(uint8_t, uint16_t))
   {
@@ -317,6 +470,12 @@ void TLE9012::wakeUp()
     }
   }
 
+/**
+ * @brief Check the GEN_DIAG register for errors and call the appropriate errorhandler function if one was defined via the
+ * attachErrorHandler function
+ * 
+ * @param nodeID is the address of the node on the daisy chain
+ */
   void TLE9012::checkErrors(uint8_t nodeID)
   {
     uint16_t gen_diag = 0;
@@ -406,11 +565,28 @@ void TLE9012::wakeUp()
     }
   }
 
+/**
+ * @brief Reset the GEN_DIAG register
+ * 
+ * Clears all errorflags stored in the GEN_DIAG register
+ * 
+ * @param nodeID is the address of the node on the daisy chain
+ */
+
   void TLE9012::resetErrors(uint8_t nodeID)
   {
     (void) writeRegisterSingle(nodeID,GEN_DIAG,0x0000);
   }
-      
+
+/**
+ * @brief Configure the Fault Mask register influencing the EMM-Signal and Error-Pin
+ * 
+ * This function can be used to mask errors that shall not trigger an Emergency Mode (EMM) Signal or influence the Error Pin
+ * 
+ * @param nodeID is the address of the node on the daisy chain
+ * @param err_mask defines what type of errors shall be masked out 
+ * @return * void 
+ */
   void TLE9012::configFaultMasks(uint8_t nodeID, err_emm_error_mask_t err_mask)
   {
     uint16_t errormask = 0;
@@ -428,7 +604,20 @@ void TLE9012::wakeUp()
 
     (void) writeRegisterSingle(nodeID,FAULT_MASK,errormask);
   }
-      //Round Robin Functions
+
+  //---------------------------------------------------------------------------
+  //                       Round Robin Functions 
+  //---------------------------------------------------------------------------
+
+
+/**
+ * @brief Set parameters for the Round Robin Error detection and self check
+ * 
+ * @param nodeID is the address of the node on the daisy chain
+ * @param rr_sleep_interval How often is the round robing triggered in rr_sleep_LSB
+ * @param rr_temp_measurement_interval External temperature measurement can be skipped every n round robin cycles
+ * @param n_errors Number of consecutive errors before error pin and GEN_DIAG register is triggered
+ */
 
   void TLE9012::setRoundRobinErrorHandling(uint8_t nodeID, uint16_t rr_sleep_interval, uint8_t rr_temp_measurement_interval, uint8_t n_errors)
   {
@@ -439,6 +628,22 @@ void TLE9012::wakeUp()
     (void) writeRegisterSingle(nodeID, RR_ERR_CNT, rr_sleep_interval | (uint16_t) rr_temp_measurement_interval | (uint16_t) n_errors);
     
   }
+
+/**
+ * @brief Configure Errormasks and Round Robin Timing
+ * 
+ * This function configures the round robin timing as well as the round robin sync function and errormasks. The Round Robin counter
+ * defines how often a Round Robin cycle is performed. In addition the RR_SYNC function can be activated which triggers a round robin cycle
+ * each time a write access to the watchdog counter is performed. 
+ * 
+ * In addition an errormask of type rr_error_mask_t can be passed as an argument which allows to enable which type of errors are
+ * included in the round robin measurement cycle
+ * 
+ * @param nodeID is the address of the node on the daisy chain
+ * @param rr_counter sets how often a Round Robin is performed
+ * @param rr_sync if 1, the sync mode is activated 
+ * @param errormask errormask defining what errors shall be monitored by the round robin. Setting flags to 1 enables the monitoring
+ */
 
   void TLE9012::setRoundRobinConfig(uint8_t nodeID, uint8_t rr_counter, uint8_t rr_sync, rr_error_mask_t errormask)
   {
@@ -456,15 +661,31 @@ void TLE9012::wakeUp()
     (void) writeRegisterSingle(nodeID, RR_CONFIG, rr_cfg);
   }
 
-      //Cell Balancing Functions
+  //---------------------------------------------------------------------------
+  //                       Balancing Functions 
+  //---------------------------------------------------------------------------
 
+/**
+ * @brief 
+ * 
+ * @param nodeID is the address of the node on the daisy chain
+ * @param pwm_duty_cycle 
+ */
   void TLE9012::setBalancingPWM(uint8_t nodeID, tle9012_balancing_pwm_t pwm_duty_cycle)
   {
     (void) writeRegisterSingle(nodeID,BAL_PWM,pwm_duty_cycle);
   }
 
+/**
+ * @brief Set the balancing time for a cell
+ * 
+ * @param nodeID is the address of the node on the daisy chain
+ * @param cell cell between 1 and 12 
+ * @param value value of the cell counter between 0 and 0x1F (7.5min steps)
+ */
   void TLE9012::setBalancingCounter(uint8_t nodeID, uint8_t cell, uint8_t value)
   {
+    cell = cell-1;
     uint8_t regblock = cell/3;
     cell = (cell%3)*5;
     uint16_t val = (value & 0x1F)<<cell;
@@ -486,12 +707,27 @@ void TLE9012::wakeUp()
     }
   }
 
+/**
+ * @brief Start Balancing on channels selected by bitmask
+ * 
+ * @param nodeID is the address of the node on the daisy chain
+ * @param balancing_mask bitmask defining on what channels balancing is activated
+ */
   void TLE9012::startBalancing(uint8_t nodeID, uint16_t balancing_mask)
   {
     (void) writeRegisterSingle(nodeID,BAL_SETTINGS,balancing_mask & 0x0FFF);
   }
 
-      //Threshold set functions
+  //---------------------------------------------------------------------------
+  //                       Error Threshold Settings
+  //---------------------------------------------------------------------------
+
+/**
+ * @brief Set Overvoltage Threshold for Error detection
+ * 
+ * @param nodeID is the address of the node on the daisy chain
+ * @param fault_threshold Overvoltage Threshold in 5V/1024 * fault_threshold
+ */
   void TLE9012::setOvervoltageThreshold(uint8_t nodeID, uint16_t fault_threshold)
   {
     uint16_t ol_ov_reg = 0;
@@ -501,6 +737,12 @@ void TLE9012::wakeUp()
     (void) writeRegisterSingle(nodeID,OL_OV_THR,ol_ov_reg);
   }
 
+/**
+ * @brief Set Undervoltage Threshold for Error detection
+ * 
+ * @param nodeID is the address of the node on the daisy chain
+ * @param fault_threshold Undervoltage Threshold in 5V/1024 * fault_threshold
+ */
   void TLE9012::setUndervoltageThreshold(uint8_t nodeID, uint16_t fault_threshold)
   {
     uint16_t ol_uv_reg = 0;
@@ -510,6 +752,14 @@ void TLE9012::wakeUp()
     (void) writeRegisterSingle(nodeID,OL_UV_THR,ol_uv_reg);
   }
 
+/**
+ * @brief Set maximum voltage drop for Open Load detection
+ * 
+ * Expected Voltage drop is approx. 15mA * Rf
+ * 
+ * @param nodeID is the address of the node on the daisy chain
+ * @param open_load_threshold threshold in 19.5mV steps
+ */
   void TLE9012::setOpenLoadThresholdMax(uint8_t nodeID, uint8_t open_load_threshold)
   {
     uint16_t ol_thr_max = 0;
@@ -519,6 +769,14 @@ void TLE9012::wakeUp()
     (void) writeRegisterSingle(nodeID,OL_OV_THR,ol_thr_max);
   }
 
+/**
+ * @brief Set minimum voltage drop for Open Load detection
+ * 
+ * Expected Voltage drop is approx. 15mA * Rf
+ * 
+ * @param nodeID is the address of the node on the daisy chain
+ * @param open_load_threshold threshold in 19.5mV steps
+ */
   void TLE9012::setOpenLoadThresholdMin(uint8_t nodeID, uint8_t open_load_threshold)
   {
     uint16_t ol_thr_min = 0;
@@ -528,16 +786,35 @@ void TLE9012::wakeUp()
     (void) writeRegisterSingle(nodeID,OL_UV_THR,ol_thr_min);
   }
 
+/**
+ * @brief Set threshold for external temperature detection
+ * 
+ * @param nodeID is the address of the node on the daisy chain
+ * @param external_overtemperature_threshold threshold for external overtemperature warning
+ */
   void TLE9012::setExternalTemperatureThreshold(uint8_t nodeID, uint16_t external_overtemperature_threshold)
   {
-
+  
   }
 
+/**
+ * @brief Set threshold for internal overtemperature
+ * 
+ * @param nodeID is the address of the node on the daisy chain
+ * @param internal_overtemperature_threshold internal DIE overtemperature limit 
+ */
   void TLE9012::setInternalTemperatureThreshold(uint8_t nodeID, uint16_t internal_overtemperature_threshold)
   {
     (void) writeRegisterSingle(nodeID, INT_OT_WARN_CONF, (internal_overtemperature_threshold & 0x3FF));
   }
 
+/**
+ * @brief Set Balancing current thresholds
+ * 
+ * @param nodeID is the address of the node on the daisy chain
+ * @param overcurrent_threshold maximum voltage drop over balancing resistor in 19.5mV steps 
+ * @param undercurrent_threshold minimum voltage drop over balancing resistor in 19.5mV steps
+ */
   void TLE9012::setBalancingCurrentThreshold(uint8_t nodeID, uint8_t overcurrent_threshold, uint8_t undercurrent_threshold)
   {
     uint16_t bal_thr = (((uint16_t) undercurrent_threshold) << 8) | overcurrent_threshold;
@@ -546,7 +823,18 @@ void TLE9012::wakeUp()
 
 
       
-      //Low Level Routines for direct register Access
+  //---------------------------------------------------------------------------
+  //                       Low Level isoUART Access Functions
+  //---------------------------------------------------------------------------
+
+/**
+ * @brief isoUART function to read a single register from a single node on the daisy chain
+ * 
+ * @param nodeID is the address of the node on the daisy chain
+ * @param regaddress address of register for this operation
+ * @param result result of the read operation is stored in this variable
+ * @return iso_uart_status_t returns status of the bustransaction
+ */
 iso_uart_status_t TLE9012::readRegisterSingle(uint8_t nodeID, uint16_t regaddress, uint16_t* result)
 {
   iso_uart_status_t status;
@@ -588,6 +876,14 @@ iso_uart_status_t TLE9012::readRegisterSingle(uint8_t nodeID, uint16_t regaddres
   return status;
 }
 
+/**
+ * @brief isoUART function to write a value to a single register on a single node in the daisy chain
+ * 
+ * @param nodeID is the address of the node on the daisy chain
+ * @param regaddress address of register for this operation
+ * @param databuffer value that shall be written to the register
+ * @return iso_uart_status_t returns status of the bustransaction
+ */
 iso_uart_status_t TLE9012::writeRegisterSingle(uint8_t nodeID, uint16_t regaddress, uint16_t databuffer) //Write data to a single register
 {
 
@@ -630,7 +926,14 @@ iso_uart_status_t TLE9012::writeRegisterSingle(uint8_t nodeID, uint16_t regaddre
   return status;
 }
 
-iso_uart_status_t TLE9012::readRegisterBroadcast(uint16_t regaddress, uint16_t* result) //Write a broadcast to all devices in the daisy chain
+/**
+ * @brief isoUART function to read the value of a register in broadcast mode from every node on the daisy chain
+ * 
+ * @param regaddress address of register for this operation
+ * @param result pointer to an array storing the result -> arraysize must be equal or larger than number of devices in the daisy chain
+ * @return iso_uart_status_t returns status of the bustransaction
+ */
+iso_uart_status_t TLE9012::readRegisterBroadcast(uint16_t regaddress, uint16_t* result) //Read a broadcast to all devices in the daisy chain
 {
   iso_uart_status_t status;
   uint8_t response_buffer[N_DEVICES*5+4];
@@ -674,7 +977,14 @@ iso_uart_status_t TLE9012::readRegisterBroadcast(uint16_t regaddress, uint16_t* 
   return status;
 }
 
-iso_uart_status_t TLE9012::writeRegisterBroadcast(uint16_t regaddress, uint16_t databuffer) //Read a register as broadcast from all devices in the chain
+/**
+ * @brief isoUART function to write a register in all nodes in the daisy chain
+ * 
+ * @param regaddress address of register for this operation
+ * @param databuffer value that shall be written to the selected register
+ * @return iso_uart_status_t returns status of the bustransaction
+ */
+iso_uart_status_t TLE9012::writeRegisterBroadcast(uint16_t regaddress, uint16_t databuffer) //Write a register as broadcast from all devices in the chain
 {
 
   iso_uart_status_t status;
@@ -716,22 +1026,42 @@ iso_uart_status_t TLE9012::writeRegisterBroadcast(uint16_t regaddress, uint16_t 
   return status;
 }
 
+/**
+ * @brief Configure the multiread function on all devices
+ * 
+ * @note currently not supported
+ * 
+ * @param cfg multiread configuration containing information about what registers shall be reed with a multiread command
+ * @return iso_uart_status_t returns status of the bustransaction
+ */
 iso_uart_status_t TLE9012::configureMultiread(multiread_cfg_t cfg)  //Write a multiread configuration to all devices in the daisy chain
 {
   return isoUART_OK; //Multiread is unsuported for the moment
 }
 
+/**
+ * @brief isoUART function to perform a multiread operation
+ * 
+ * @note currently not supported
+ * 
+ * @param databuffer databuffer for the multiread command. The databuffer must have a large enough size to prevent bufferoverflow
+ * @return iso_uart_status_t returns status of the bustransaction
+ */
 iso_uart_status_t TLE9012::multiRead(multread_result_t* databuffer) //Multiread command from all devices in the chain
 {
   return isoUART_OK; //Multiread is unsuported for the moment
 }
 
-//Private Functions start here
+  //---------------------------------------------------------------------------
+  //                       Platform dependent Functions
+  //---------------------------------------------------------------------------
 
-/*
-  Calculate the CRC-3 of the reply Frame
-  returns 1 if crc is correct and 0 if crc is false
-*/
+/**
+ * @brief Check the crc3 of reply frames of the isoUART protocol
+ * 
+ * @param replyframe 8bit replyframe including the CRC3
+ * @return uint8_t returns 1 if CRC is correct and 0 if CRC is incorrect
+ */
 uint8_t TLE9012::crc3(uint8_t replyframe)
 {
     uint8_t polynomial = 0xB0;
@@ -754,6 +1084,13 @@ uint8_t TLE9012::crc3(uint8_t replyframe)
         return 0;
 }
 
+/**
+ * @brief Calculate the crc8 for dataframes in the isoUART protocol
+ * 
+ * @param buffer buffer containing the data for the crc calculation
+ * @param len length of the buffer
+ * @return uint8_t crc8 value
+ */
 uint8_t TLE9012::crc8(uint8_t* buffer, uint16_t len)
 {
   const uint8_t polynomial = 0x1D;
@@ -777,6 +1114,13 @@ uint8_t TLE9012::crc8(uint8_t* buffer, uint16_t len)
   return crc^0xFF;
 }
 
+/**
+ * @brief flip bits in an byte to allow for msb first uart frames over arduinos lsb first serial driver
+ * 
+ * @param data databuffer with bytes that shall be converted from lsb first to msb first
+ * @param len length of the buffer
+ * @return uint8_t always returns 0
+ */
 uint8_t TLE9012::msb_first_converter(uint8_t* data, uint16_t len)
 {
   for(uint16_t n = 0;  n < len; n++)
@@ -788,6 +1132,17 @@ uint8_t TLE9012::msb_first_converter(uint8_t* data, uint16_t len)
   return 0;
 }
 
+/**
+ * @brief starts a write request on the isoUART bus
+ * 
+ * While the writeRegisterSingle function seems to do the same, the isoUARTWriteRequest function
+ * provides a wrapper to allow for an easy adaption to different Frameworks with different Serial
+ * style implementations
+ * 
+ * @param nodeID is the address of the node on the daisy chain
+ * @param regaddress address of register for this operation
+ * @param data data that shall be written to the register
+ */
 void TLE9012::isoUARTWriteRequest(uint8_t nodeID, uint8_t regaddress, uint16_t data)
 {
   uint8_t writebuffer[6];
@@ -806,6 +1161,15 @@ void TLE9012::isoUARTWriteRequest(uint8_t nodeID, uint8_t regaddress, uint16_t d
   hisoUART->write(writebuffer,6);
 }
 
+/**
+ * @brief request data from a device using the isoUART protocol
+ * 
+ * Note that this function does not handle the received data but only sends a request for data.
+ * Handeling of the received packet is in the responsibility of the caller function
+ * 
+ * @param nodeID is the address of the node on the daisy chain
+ * @param regaddress 
+ */
 void TLE9012::isoUARTReadRequest(uint8_t nodeID, uint8_t regaddress)
 {
   uint8_t writebuffer[4];
@@ -821,12 +1185,23 @@ void TLE9012::isoUARTReadRequest(uint8_t nodeID, uint8_t regaddress)
   hisoUART->write(writebuffer,4);
 }
 
+/**
+ * @brief Clear remaining RX Buffer in case something went wrong during isoUART read or write
+ * 
+ */
 void TLE9012::isoUARTClearRXBUffer()
 {
   while(hisoUART->available())
     uint8_t null = hisoUART->read();
 }
 
+/**
+ * @brief Delay in milliseconds
+ * 
+ * Wrapper function to enable easier port to different Architectures/Frameworks
+ * 
+ * @param delay_ms Minimum delay time in milliseconds
+ */
 void TLE9012::mcuDelay(uint32_t delay_ms)
 {
   delay(delay_ms);
