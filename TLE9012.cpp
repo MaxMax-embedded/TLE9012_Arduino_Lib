@@ -152,7 +152,9 @@ void TLE9012::wakeUp()
 
     (void) readRegisterSingle(nodeID,BVM,&devices[deviceID].block_voltage);
     (void) readRegisterSingle(nodeID,SCVM_HIGH,&devices[deviceID].scvm_high);
+    devices[deviceID].scvm_high &= 0xFFE0; //Remove rolling counter
     (void) readRegisterSingle(nodeID,SCVM_LOW,&devices[deviceID].scvm_low);
+    devices[deviceID].scvm_low &= 0xFFE0; //Remove rolling counter
   }
 
   /**
@@ -466,6 +468,8 @@ void TLE9012::wakeUp()
         break;
       case BALANCING_OVERCURRENT_ERROR:
         errorcallbacks.balancing_error_overcurrent_callback = errorhandler;
+        break;
+      default:
         break;
     }
   }
