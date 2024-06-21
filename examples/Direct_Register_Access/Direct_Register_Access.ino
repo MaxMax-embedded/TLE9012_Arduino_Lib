@@ -24,50 +24,60 @@ SOFTWARE.
 
 
 #include "TLE9012.h"
-//#include <Serial.h>
+#include "TLE9012_Makros.h"
 
+#define TXPIN 17
+#define RXPIN 16
 
 TLE9012 tle9012;
 
-ntc_config_t ntc_config = {.ntc_resistance=100000,.ntc_b_value=3000};
 
+/**
+ * This Example illustrates how to use low level register access to implement functionallity with no
+ * corresponding higher level library function.
+ * 
+ * This example was written for a ESP32-Node MCU Development Board
+ */
 
 void setup() {
-  // put your setup code here, to run once:
-  tle9012.init(&Serial2, 2000000,16,17);
+  
+  //To keep the example short, the initilization is performed using higher level functions
+  tle9012.init(&Serial2, 2000000,RXPIN,TXPIN);
   Serial.begin(115200);
   Serial.println("Boot completed");
   tle9012.wakeUp();
   delay(200);
-  tle9012.setExtendedWatchdog(0);
+
   tle9012.setNodeID(0, 1, 1);
   tle9012.writeMailboxRegister(1, 0xAA55);
 
   uint16_t mailbox = tle9012.readMailboxRegister(1);
   if(mailbox == 0xAA55)
-    Serial.println("Mailbox Check completed");
+    Serial.println("Connection Check completed");
 
-  tle9012.setNumberofCells(1, 12);
-  tle9012.setTempSensorsConfig(1, 5, ntc_config);
-  uint16_t ptconf = 0;
-  tle9012.readRegisterSingle(1, 0x01, &ptconf);
-  Serial.println(ptconf);
+  tle9012.writeRegisterSingle(1,PART_CONFIG,0x0FFF); // Set Part Config Register 
+
 }
 
 void loop() {
 
   // put your main code here, to run repeatedly:
-  tle9012.readTemperatures(1);
-  for(uint8_t n = 0; n < 5; n++)
+  tle9012.writeRegisterBroadcast(WDOG_CNT,0x007F); // Broadcast Write Command to reset Watchdog Counter
+
+  tle9012.writeRegisterSingle(1, MEAS_CTRL, 0xEE61); //Start cell measurement
+  delay(10); //Wait till measurement is completed
+
+  uint16_t cell0_voltage = 0; 
+  iso_uart_status_t status = isoUART_OK;
+
+  status = tle9012.readRegisterSingle(1,PCVM_0,&cell0_voltage); //Read cell voltage and communication status
+
+  //Check if the bus action was transfered successfully
+  if(status != isoUART_OK)
   {
-    Serial.println("-------------------------------------------");
-    Serial.print("Resistance ");
-    Serial.print(n+1);
-    Serial.print(" : ");
-    Serial.print(tle9012.devices[0].ntc_resistances[n]);
-    Serial.print("\n");
-    Serial.println("-------------------------------------------");
+    Serial.print("Error during bus communication");
   }
+
   delay(1000);
 
 }
