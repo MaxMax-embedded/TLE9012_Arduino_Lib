@@ -50,11 +50,11 @@ const float current_source_exp_lookup[] = {1.0, 4.0, 16.0, 64.0};
 #define ADCVALUE_TO_FLOAT_VOLTAGE(value) (5.0/65536 * (float) value)
 #define NTC_MEASUREMENT_TO_R(value,r_temp_filter) ((2.0*(value&0x03FF)*current_source_exp_lookup[(value>>11)&0x03])/(1024*0.000320) - r_temp_filter)
 #define VOLTAGE_TO_OC_UC_LIMIT(voltage) ((uint16_t) ((voltage/5.0) * 1024))
+#define VOLTAGE_TO_OV_UV_LIMIT(voltage) ((uint16_t) ((voltage/5.0) * 1024))
 #define VOLTAGE_TO_OL_THRESHOLD(voltage) ((uint8_t) voltage/0.0195) //note max input voltage should not exceed ~1.2285V
 #define ADCVALUE_TO_FLOAT_BLOCKVOLTAGE(value) (60.0/65536 * (float) value)
 #define INTERNAL_IC_TEMP_TO_DEGREE(value) (-0.6624 * (float) (value & 0x3FF) + 547.3) //Kelvin/degree conversion already included?
 #define DEGREE_TO_IC_TEMP_LIMIT(degree) (((uint16_t)((degree - 547.3)/(-0.6624)))&0x3FF) //Kelvin/degree conversion already included?
-
 
 //-----------------------------------------------------------------------------
 //                          Defines for Lib functions
@@ -62,8 +62,6 @@ const float current_source_exp_lookup[] = {1.0, 4.0, 16.0, 64.0};
 
 #define WRITECOMMAND 0x80 
 #define BROADCAST_ID 0x3F
-
-
 
 //-----------------------------------------------------------------------------
 //                          Typedefs start here
@@ -120,12 +118,13 @@ typedef struct
 
 /** Data structure to describe properties for NTC Resistors. The current model
  *  uses a base resistance and a b value to calculate temperature following the formula
- * B*(T-TR)/(T*TR) = ln(RR/RT)
+ * T(R) = 1/((ln(R/ntc_resistance)/ntc_b_value) + (1/basetemp))
  */
 typedef struct
 {
-  float ntc_resistance;
-  float ntc_b_value;
+  float ntc_resistance; //Base Value of the NTC
+  float ntc_b_value;  //Beta value of the NTC
+  float basetemp; //Temperature of the NTC at specified resistance in Kelvin
 } ntc_config_t;
 
 /**
@@ -148,8 +147,10 @@ typedef struct
   uint16_t cell_voltages[12]; /**< Array that hold up to 12 cell voltages that can be measured */
   uint16_t block_voltage; /**< Block Voltage of the complete stack */
   uint16_t ntc_resistances[5]; /**< Measured NTC Resistance */
+  uint8_t ntc_results_valid;
   uint16_t chiptemperature1; /**< Temperature of internal Temperature Sensor Nr. 1 */
   uint16_t chiptemperature2; /**< Temperature of internal Temperature Sensor Nr. 2 */
+  uint8_t chiptemperatures_valid;
   uint16_t mailbox_register; /**< Content of the Mailbox Register */
   uint16_t scvm_high; /**< Highest value measured by the secondary measurement path */
   uint16_t scvm_low; /**< Lowest value measured by the secondary measurement path */
@@ -334,6 +335,7 @@ typedef struct
       void readTemperatures(uint8_t nodeID);
       void setNumberofCells(uint8_t nodeID, uint8_t n_cells);
       void setTempSensorsConfig(uint8_t nodeID, uint8_t n_temp_sensors,ntc_config_t sensorconfig);
+      void readChipTemperatures(uint8_t nodeID);
 
       //Watchdog and Power state handling
       void activateSleep();
@@ -349,7 +351,7 @@ typedef struct
 
 
       //Error checking and handling
-      void checkDiagnoseResistor(uint8_t nodeID);
+      uint8_t checkDiagnoseResistor(uint8_t nodeID);
       void attachErrorHandler(tle9012_error_t errortype, void (*errorhandler)(uint8_t, uint16_t));
       void checkErrors(uint8_t nodeID);
       void resetErrors(uint8_t nodeID);

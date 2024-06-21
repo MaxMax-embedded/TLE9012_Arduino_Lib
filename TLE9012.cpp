@@ -182,10 +182,21 @@ void TLE9012::wakeUp()
     (void) writeRegisterSingle(nodeID, MEAS_CTRL, 0x0080);
     mcuDelay(5);
     
+    devices[deviceID].ntc_results_valid = 0;
     for(uint8_t n = 0; n < devices[deviceID].n_temp_sensors; n++)
     {
       (void) readRegisterSingle(nodeID,EXT_TEMP0+n,&devices[deviceID].ntc_resistances[n]);
+
+      if((devices[deviceID].ntc_resistances[n]>>13)&0x01)
+      {
+        devices[deviceID].ntc_results_valid++;
+      }
     }
+
+    if(devices[deviceID].ntc_results_valid == 0)
+      devices[deviceID].ntc_results_valid = 1;
+    else
+      devices[deviceID].ntc_results_valid = 0;
     
   }
   
@@ -277,7 +288,37 @@ void TLE9012::wakeUp()
     (void) writeRegisterSingle(nodeID, AVM_CONFIG, avm_sensemask);
   }
  
- 
+/**
+ * @brief Read the internal chip temperature of internal chiptemperature sensor 1 and 2
+ * 
+ * Internal chip Temperatures are stored in the devices[] struct only if the temperatures are valid.
+ * 
+ * @param nodeID is the address of the node on the daisy chain
+ */
+  void TLE9012::readChipTemperatures(uint8_t nodeID)
+  {
+    if(nodeID > N_DEVICES)
+    {
+      return; //Early return if device number is to high
+    }
+
+    uint8_t deviceID = nodeID - 1;
+
+    if(nodeID == 0)
+      deviceID = 0;
+    else
+      deviceID = nodeID-1;
+
+    (void) readRegisterSingle(nodeID,INT_TEMP,&devices[deviceID].chiptemperature1);
+    (void) readRegisterSingle(nodeID,INT_TEMP_2,&devices[deviceID].chiptemperature2);
+
+    if(((devices[deviceID].chiptemperature1>>13)&0x01) && ((devices[deviceID].chiptemperature2>>13)&0x01))
+      devices[deviceID].chiptemperatures_valid = 1;
+    else
+      devices[deviceID].chiptemperatures_valid = 0;
+    
+  }
+
   //---------------------------------------------------------------------------
   //                       Watchdog and Powermode Functions
   //---------------------------------------------------------------------------
@@ -416,9 +457,74 @@ void TLE9012::wakeUp()
   //                       Error Checking and Handling 
   //---------------------------------------------------------------------------
 
-  void TLE9012::checkDiagnoseResistor(uint8_t nodeID)
+/**
+ * @brief Check if the Diagnosis resistor measurement is inside the expected range. This can be used in error handlers to
+ * further analyse the root cause of errors
+ * 
+ * @param nodeID is the address of the node on the daisy chain
+ * @return uint8_t returns 1 if diagnosis resistor is inside of the temperature range, 2 if no valid result is detected and 0 if
+ * the diagnosis resistance is outside of the expected range
+ */
+  uint8_t TLE9012::checkDiagnoseResistor(uint8_t nodeID)
   {
     //Not implemented yet
+    uint16_t reg_diag_r = 0;
+    (void) readRegisterSingle(nodeID, EXT_TEMP_R_DIAG, &reg_diag_r);
+    if((reg_diag_r>>13)&0x01)
+      return 2;
+    uint16_t result = reg_diag_r & 0x03FF;
+    uint8_t intc = (reg_diag_r >> 10) &0x03;
+
+    switch (intc)
+    {
+    case 3:
+      if((reg_diag_r > 218) | (reg_diag_r < 107))
+      {
+        return 1;
+      }
+      else
+      {
+        return 0;
+      }
+      break;
+
+    case 2:
+      if((reg_diag_r > 358) | (reg_diag_r < 193))
+      {
+        return 1;
+      }
+      else
+      {
+        return 0;
+      }
+      break;
+
+    case 1:
+      if((reg_diag_r > 603) | (reg_diag_r < 326))
+      {
+        return 1;
+      }
+      else
+      {
+        return 0;
+      }
+      break;
+
+    case 0:
+      if((reg_diag_r > 950) | (reg_diag_r < 595))
+      {
+        return 1;
+      }
+      else
+      {
+        return 0;
+      }
+      break;
+    
+    default:
+      break;
+    }
+
   }
 
 
