@@ -947,6 +947,7 @@ void TLE9012::wakeUp()
  */
 iso_uart_status_t TLE9012::readRegisterSingle(uint8_t nodeID, uint16_t regaddress, uint16_t* result)
 {
+  ISOUART_LOCK();
   iso_uart_status_t status;
   uint8_t response_buffer[9];
   
@@ -970,6 +971,7 @@ iso_uart_status_t TLE9012::readRegisterSingle(uint8_t nodeID, uint16_t regaddres
   if(status != isoUART_OK)
   {
     status = isoUART_TIMEOUT;
+    ISOUART_UNLOCK();
     return status;
   }
 
@@ -980,9 +982,10 @@ iso_uart_status_t TLE9012::readRegisterSingle(uint8_t nodeID, uint16_t regaddres
 
   *result = (((uint16_t) response_buffer[6])<<8) | ((uint16_t) response_buffer[7]);
 
-  if(crc != response_buffer[8]);
-    //status = isoUART_CRC_ERROR;
+  if(crc != response_buffer[8])
+    status = isoUART_CRC_ERROR;
 
+  ISOUART_UNLOCK();
   return status;
 }
 
@@ -996,7 +999,7 @@ iso_uart_status_t TLE9012::readRegisterSingle(uint8_t nodeID, uint16_t regaddres
  */
 iso_uart_status_t TLE9012::writeRegisterSingle(uint8_t nodeID, uint16_t regaddress, uint16_t databuffer) //Write data to a single register
 {
-
+  ISOUART_LOCK();
   iso_uart_status_t status;
   uint8_t response_buffer[7];
   
@@ -1020,6 +1023,7 @@ iso_uart_status_t TLE9012::writeRegisterSingle(uint8_t nodeID, uint16_t regaddre
   if(status != isoUART_OK)
   {
     status = isoUART_TIMEOUT;
+    ISOUART_UNLOCK();
     return status;
   }  
 
@@ -1030,9 +1034,10 @@ iso_uart_status_t TLE9012::writeRegisterSingle(uint8_t nodeID, uint16_t regaddre
   if(!crc3(response_buffer[6]))
   {
     status = isoUART_CRC_ERROR;
+    ISOUART_UNLOCK();
     return status;
   }
-
+  ISOUART_UNLOCK();
   return status;
 }
 
@@ -1045,6 +1050,7 @@ iso_uart_status_t TLE9012::writeRegisterSingle(uint8_t nodeID, uint16_t regaddre
  */
 iso_uart_status_t TLE9012::readRegisterBroadcast(uint16_t regaddress, uint16_t* result) //Read a broadcast to all devices in the daisy chain
 {
+  ISOUART_LOCK();
   iso_uart_status_t status;
   uint8_t response_buffer[N_DEVICES*5+4];
   
@@ -1068,6 +1074,7 @@ iso_uart_status_t TLE9012::readRegisterBroadcast(uint16_t regaddress, uint16_t* 
   if(status != isoUART_OK)
   {
     status = isoUART_TIMEOUT;
+    ISOUART_UNLOCK();
     return status;
   }
   
@@ -1083,7 +1090,7 @@ iso_uart_status_t TLE9012::readRegisterBroadcast(uint16_t regaddress, uint16_t* 
       status = isoUART_CRC_ERROR;
   }
   
-
+  ISOUART_UNLOCK();
   return status;
 }
 
@@ -1096,7 +1103,7 @@ iso_uart_status_t TLE9012::readRegisterBroadcast(uint16_t regaddress, uint16_t* 
  */
 iso_uart_status_t TLE9012::writeRegisterBroadcast(uint16_t regaddress, uint16_t databuffer) //Write a register as broadcast from all devices in the chain
 {
-
+  ISOUART_LOCK();
   iso_uart_status_t status;
   uint8_t response_buffer[7];
   
@@ -1119,6 +1126,7 @@ iso_uart_status_t TLE9012::writeRegisterBroadcast(uint16_t regaddress, uint16_t 
   if(status != isoUART_OK)
   {
     status = isoUART_TIMEOUT;
+    ISOUART_UNLOCK();
     return status;
   }
 
@@ -1130,9 +1138,11 @@ iso_uart_status_t TLE9012::writeRegisterBroadcast(uint16_t regaddress, uint16_t 
   if(!crc3(response_buffer[6]))
   {
     status = isoUART_CRC_ERROR;
+    ISOUART_UNLOCK();
     return status;
   }
 
+  ISOUART_UNLOCK();
   return status;
 }
 
@@ -1159,6 +1169,9 @@ iso_uart_status_t TLE9012::configureMultiread(multiread_cfg_t cfg)  //Write a mu
  */
 iso_uart_status_t TLE9012::multiRead(multread_result_t* databuffer) //Multiread command from all devices in the chain
 {
+  ISOUART_LOCK();
+
+  ISOUART_UNLOCK();
   return isoUART_OK; //Multiread is unsuported for the moment
 }
 

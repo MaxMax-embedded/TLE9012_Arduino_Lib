@@ -40,6 +40,7 @@ SOFTWARE.
 #define ISOUART_TIMEOUT 100 //IsoUART Timeout in Milliseconds
 
 #define SOFT_MSB_FIRST //undef in case the hardware serial port can be configured to handle MSB First in Hardware
+//#define THREAD_SAFE //Uncomment if Thread safety is required -> add code to mutex lock makros for your RTOS/Scheduler
 
 //-----------------------------------------------------------------------------
 //                          Useful conversion makros
@@ -62,6 +63,16 @@ const float current_source_exp_lookup[] = {1.0, 4.0, 16.0, 64.0};
 
 #define WRITECOMMAND 0x80 
 #define BROADCAST_ID 0x3F
+
+
+//Define calls to Mutex Locks here
+#ifdef THREAD_SAFE
+#define ISOUART_LOCK()
+#define ISOUART_UNLOCK()
+#else
+#define ISOUART_LOCK()
+#define ISOUART_UNLOCK()
+#endif
 
 //-----------------------------------------------------------------------------
 //                          Typedefs start here
