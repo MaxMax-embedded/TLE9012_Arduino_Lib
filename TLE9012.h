@@ -335,7 +335,7 @@ typedef struct
 
       
       
-      void init(HardwareSerial* serial, uint32_t baudrate,uint8_t rxpin,uint8_t txpin);//Driver init
+      void init(HardwareSerial* serial,uint32_t baudrate,uint8_t rxpin,uint8_t txpin);//Driver init
       void wakeUp();
       
 

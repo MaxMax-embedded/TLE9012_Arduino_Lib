@@ -73,14 +73,23 @@ TLE9012::~TLE9012() //Destructor
 * @param txpin optional parameter to specify TX Pin under some architectures
 */      
       
-void TLE9012::init(HardwareSerial* serial, uint32_t baudrate=1000000,uint8_t rxpin=0,uint8_t txpin=0)//Driver init
+void TLE9012::init(HardwareSerial* serial, uint32_t baudrate,uint8_t rxpin,uint8_t txpin)//Driver init
 {
   hisoUART = serial;
   if((rxpin != 0) && (txpin != 0))
+  {
+    #ifdef ARDUINO_ARCH_ESP32
     hisoUART->begin(baudrate,SERIAL_8N1,rxpin,txpin);
-  else
+    #else
     hisoUART->begin(baudrate,SERIAL_8N1);
+    #endif
+  }
+  else
+  {
+    hisoUART->begin(baudrate,SERIAL_8N1);
+  }
 }
+
 
 /**
 * @brief Wakeup all TLE9012 devices on the Bus
@@ -147,7 +156,7 @@ void TLE9012::wakeUp()
 
     for(uint8_t n = 0; n < devices[deviceID].n_cells; n++)
     {
-      (void) readRegisterSingle(nodeID, PCVM_0 + (11-devices[deviceID].n_cells + n), &devices[deviceID].cell_voltages[n]);
+      (void) readRegisterSingle(nodeID, PCVM_0 + (12-devices[deviceID].n_cells + n), &devices[deviceID].cell_voltages[n]);
     }
 
     (void) readRegisterSingle(nodeID,BVM,&devices[deviceID].block_voltage);
