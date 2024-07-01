@@ -987,7 +987,7 @@ iso_uart_status_t TLE9012::readRegisterSingle(uint8_t nodeID, uint16_t regaddres
   #ifdef SOFT_MSB_FIRST
   msb_first_converter(&(response_buffer[4]),5);
   #endif
-  uint8_t crc = crc8(&response_buffer[4],5);
+  uint8_t crc = crc8(&response_buffer[4],4);
 
   *result = (((uint16_t) response_buffer[6])<<8) | ((uint16_t) response_buffer[7]);
 
@@ -1093,7 +1093,7 @@ iso_uart_status_t TLE9012::readRegisterBroadcast(uint16_t regaddress, uint16_t* 
 
   for(uint8_t n = 0; n < N_DEVICES; n++)
   {
-    uint8_t crc = crc8(&response_buffer[4+(n*N_DEVICES)],5);
+    uint8_t crc = crc8(&response_buffer[4+(n*N_DEVICES)],4);
     result[n] = (((uint16_t) response_buffer[6+(n*N_DEVICES)])<<8) | ((uint16_t) response_buffer[7+(n*N_DEVICES)]);
     if(crc != 0)
       status = isoUART_CRC_ERROR;
