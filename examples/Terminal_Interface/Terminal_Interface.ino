@@ -55,7 +55,7 @@ The following commands are implemented:\n \
 
 void setup() { 
   Serial.begin(115200); //Start Console interface
-  tle9012.init(&Serial2, 2000000,RXPIN,TXPIN); //Initialize driver with 2Mbit
+  tle9012.init(&Serial1, 1000000,0,0); //Initialize driver with 2Mbit
 }
 
 void loop() {
@@ -136,6 +136,7 @@ void interpretCommand(const char commandbuffer[], uint8_t bufferlength)
 
     if(sscanf(commandbuffer,"%s",cmd)  == 1) //Read command
     {
+      Serial.write(commandbuffer,bufferlength);
       if(!strcmp(cmd,"IL")) //Emulate IL Command (no function because no ring bus mode is supported by this library)
       {
         Serial.println("IL OK");
@@ -156,7 +157,12 @@ void interpretCommand(const char commandbuffer[], uint8_t bufferlength)
           iso_uart_status_t status = tle9012.writeRegisterSingle(dev_address, reg_address, data);
           if(status == isoUART_OK)
           {
-            Serial.println("OK 8000");
+            Serial.print("WL ");
+            Serial.print(" ");
+            Serial.print(dev_address,HEX);
+            Serial.print(" ");
+            Serial.print(reg_address, HEX);
+            Serial.println(" OK 8000");
           }
           if(status == isoUART_TIMEOUT)
           {
@@ -185,6 +191,11 @@ void interpretCommand(const char commandbuffer[], uint8_t bufferlength)
           iso_uart_status_t status = tle9012.readRegisterSingle(dev_address, reg_address, &data);
           if(status == isoUART_OK)
           {
+            Serial.print("RL ");
+            Serial.print(dev_address,HEX);
+            Serial.print(" ");
+            Serial.print(reg_address,HEX);
+            Serial.print(" ");
             Serial.print(data,HEX);
             Serial.print(" OK ");
             Serial.println("8000");
