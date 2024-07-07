@@ -998,6 +998,52 @@ iso_uart_status_t TLE9012::readRegisterSingle(uint8_t nodeID, uint16_t regaddres
   return status;
 }
 
+iso_uart_status_t TLE9012::readRegisterSingle_ext(uint8_t* nodeID, uint16_t* regaddress, uint16_t* result)
+{
+  ISOUART_LOCK();
+  iso_uart_status_t status;
+  uint8_t response_buffer[9];
+  
+  status = isoUART_TIMEOUT;
+
+  isoUARTClearRXBUffer();
+  isoUARTReadRequest(*nodeID, *regaddress);
+
+  uint32_t starttime = millis();
+  while((millis()-starttime) < ISOUART_TIMEOUT)
+  {
+    if(hisoUART->available() > 8)
+    {
+      hisoUART->readBytes(response_buffer,9);
+      status = isoUART_OK;
+      break;
+    }
+  }
+
+  //Check if Timeout occured
+  if(status != isoUART_OK)
+  {
+    status = isoUART_TIMEOUT;
+    ISOUART_UNLOCK();
+    return status;
+  }
+
+  #ifdef SOFT_MSB_FIRST
+  msb_first_converter(&(response_buffer[4]),5);
+  #endif
+  uint8_t crc = crc8(&response_buffer[4],4);
+
+  *result = (((uint16_t) response_buffer[6])<<8) | ((uint16_t) response_buffer[7]);
+  *regaddress = (uint16_t) response_buffer[5];
+  *nodeID = (uint8_t) response_buffer[4];
+
+  if(crc != response_buffer[8])
+    status = isoUART_CRC_ERROR;
+
+  ISOUART_UNLOCK();
+  return status;
+}
+
 /**
  * @brief isoUART function to write a value to a single register on a single node in the daisy chain
  * 

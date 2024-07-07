@@ -1,4 +1,4 @@
-# A Arduino Library for the Infineon TLE9012 Battery Management IC
+# An Arduino Library for the Infineon TLE9012 Battery Management IC
 
 This Library aims to be an easy to use solution to experiment with the TLE9012 BMS IC from Infineon. There are a couple examples included in the examples folder to get you started using the basic functions of the library. More complex examples are planed to be added in the future. Examples are written for a ESP32 Node MCU but can be adapted to other boards by passing an appropriate HardwareSerial instance to the tle9012.init() function. If RX and TX pins are fixed for the architecture just pass 0 for the rxpin and txpin arguments. 
 

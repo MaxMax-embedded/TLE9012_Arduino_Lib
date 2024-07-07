@@ -391,6 +391,7 @@ typedef struct
 
       //Low Level Routines for direct register Access
       iso_uart_status_t readRegisterSingle(uint8_t nodeID, uint16_t regaddress, uint16_t* result);  //Read data from a single register
+      iso_uart_status_t readRegisterSingle_ext(uint8_t* nodeID, uint16_t* regaddress, uint16_t* result); //Extended Read Function that reads back all parameters (data, return frame address and returned node ID)
       iso_uart_status_t writeRegisterSingle(uint8_t nodeID, uint16_t regaddress, uint16_t databuffer); //Write data to a single register
 
       iso_uart_status_t readRegisterBroadcast(uint16_t regaddress, uint16_t* result); //Write a broadcast to all devices in the daisy chain
