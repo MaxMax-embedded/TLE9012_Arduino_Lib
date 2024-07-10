@@ -1139,9 +1139,9 @@ iso_uart_status_t TLE9012::readRegisterBroadcast(uint16_t regaddress, uint16_t* 
 
   for(uint8_t n = 0; n < N_DEVICES; n++)
   {
-    uint8_t crc = crc8(&response_buffer[4+(n*N_DEVICES)],4);
-    result[n] = (((uint16_t) response_buffer[6+(n*N_DEVICES)])<<8) | ((uint16_t) response_buffer[7+(n*N_DEVICES)]);
-    if(crc != 0)
+    uint8_t crc = crc8(&response_buffer[4+(5*n)],4);
+    result[n] = (((uint16_t) response_buffer[6+(n*5)])<<8) | ((uint16_t) response_buffer[7+(n*5)]);
+    if(crc != response_buffer[8+(n*5)])
       status = isoUART_CRC_ERROR;
   }
   
@@ -1204,30 +1204,118 @@ iso_uart_status_t TLE9012::writeRegisterBroadcast(uint16_t regaddress, uint16_t 
 /**
  * @brief Configure the multiread function on all devices
  * 
- * @note currently not supported
+ * @note All devices in the daisy chain must have the same multiread address
  * 
  * @param cfg multiread configuration containing information about what registers shall be reed with a multiread command
  * @return iso_uart_status_t returns status of the bustransaction
  */
-iso_uart_status_t TLE9012::configureMultiread(multiread_cfg_t cfg)  //Write a multiread configuration to all devices in the daisy chain
+iso_uart_status_t TLE9012::configureMultiread(multiread_cfg_t* cfg)  //Write a multiread configuration to all devices in the daisy chain
 {
-  return isoUART_OK; //Multiread is unsuported for the moment
+  
+  uint16_t multiread_cfg_reg = ((cfg->n_pcvm) & 0xF) |
+                               ((cfg->bvm_sel & 0x1) << 4) |
+                               ((cfg->ext_temp_sel & 0x7) << 5) |
+                               ((cfg->ext_temp_r_sel & 0x1) << 8) |
+                               ((cfg->int_temp_sel & 0x1) << 9) |
+                               ((cfg->scvm_sel & 0x1) << 10) |
+                               ((cfg->stress_pcvm_sel & 0x1) << 11);
+
+   cfg->n_responses = cfg->n_pcvm + cfg->bvm_sel + cfg->ext_temp_sel + cfg->ext_temp_r_sel + cfg->int_temp_sel + cfg->scvm_sel + cfg->stress_pcvm_sel;
+
+  iso_uart_status_t status = writeRegisterBroadcast(MULTI_READ_CFG, multiread_cfg_reg);
+
+  return status; //Multiread is unsuported for the moment
 }
 
 /**
  * @brief isoUART function to perform a multiread operation
  * 
- * @note currently not supported
+ * @note Broadcast multiread is not possible
  * 
+ * @param nodeID targed address for the multiread command
  * @param databuffer databuffer for the multiread command. The databuffer must have a large enough size to prevent bufferoverflow
  * @return iso_uart_status_t returns status of the bustransaction
  */
-iso_uart_status_t TLE9012::multiRead(multread_result_t* databuffer) //Multiread command from all devices in the chain
+
+iso_uart_status_t TLE9012::multiRead(uint8_t nodeID, multiread_cfg_t cfg, multread_result_t* databuffer) //Multiread command from all devices in the chain
 {
   ISOUART_LOCK();
+  iso_uart_status_t status;
+  uint8_t response_buffer[5*cfg.n_responses+4];
+  
+  status = isoUART_TIMEOUT;
 
+  isoUARTClearRXBUffer();
+  isoUARTReadRequest(BROADCAST_ID, MULTI_READ);
+
+  uint32_t starttime = millis();
+  while((millis()-starttime) < ISOUART_TIMEOUT)
+  {
+    if(hisoUART->available() > (3+(5*cfg.n_responses)))
+    {
+      hisoUART->readBytes(response_buffer,4+5*cfg.n_responses);
+      status = isoUART_OK;
+      break;
+    }
+  }
+
+  //Check if Timeout occured
+  if(status != isoUART_OK)
+  {
+    status = isoUART_TIMEOUT;
+    ISOUART_UNLOCK();
+    return status;
+  }
+  
+  #ifdef SOFT_MSB_FIRST
+  msb_first_converter(&response_buffer[4],5*cfg.n_responses);
+  #endif
+
+  for(uint8_t n = 0; n < cfg.n_responses; n++)
+  {
+    uint8_t crc = crc8(&response_buffer[4+(5*n)],4);
+    if(crc != response_buffer[8+(n*5)])
+      status = isoUART_CRC_ERROR;
+      return status;
+  }
+
+  if(cfg.n_pcvm > 0)
+  {
+    for(uint8_t n = 0; n < cfg.n_pcvm; n++)
+    {
+      databuffer->pcvm[n] = (((uint16_t) response_buffer[6+(n*5)])<<8) | ((uint16_t) response_buffer[7+(n*5)]);
+    }
+  }
+  
+  if(cfg.bvm_offset != 0)
+    databuffer->bvm = (((uint16_t) response_buffer[6+(cfg.bvm_offset*5)])<<8) | ((uint16_t) response_buffer[7+(cfg.bvm_offset*5)]);
+  
+  if(cfg.n_pcvm > 0)
+  {
+    for(uint8_t n = 0; n < cfg.ext_temp_sel; n++)
+    {
+      databuffer->ext_temp[n] = (((uint16_t) response_buffer[6+((n+cfg.ext_temp_sel_offset)*5)])<<8) | ((uint16_t) response_buffer[7+((n+cfg.ext_temp_sel_offset)*5)]);
+    }
+  }
+  
+
+  if(cfg.ext_temp_r_offset != 0)
+    databuffer->r_diag = (((uint16_t) response_buffer[6+(cfg.ext_temp_r_offset*5)])<<8) | ((uint16_t) response_buffer[7+(cfg.ext_temp_r_offset*5)]);
+
+  if(cfg.int_temp_sel_offset != 0)
+    databuffer->int_temp = (((uint16_t) response_buffer[6+(cfg.int_temp_sel_offset*5)])<<8) | ((uint16_t) response_buffer[7+(cfg.int_temp_sel_offset*5)]);
+
+  if(cfg.scvm_offset_high != 0)
+    databuffer->scvm[0] = (((uint16_t) response_buffer[6+(cfg.scvm_offset_high*5)])<<8) | ((uint16_t) response_buffer[7+(cfg.scvm_offset_high*5)]);
+
+  if(cfg.scvm_offset_low != 0)
+    databuffer->scvm[1] = (((uint16_t) response_buffer[6+(cfg.scvm_offset_low*5)])<<8) | ((uint16_t) response_buffer[7+(cfg.scvm_offset_low*5)]);
+
+  if(cfg.stress_pcvm_offset != 0)
+    databuffer->stress_pcvm = (((uint16_t) response_buffer[6+(cfg.stress_pcvm_offset*5)])<<8) | ((uint16_t) response_buffer[7+(cfg.stress_pcvm_offset*5)]);
+  
   ISOUART_UNLOCK();
-  return isoUART_OK; //Multiread is unsuported for the moment
+  return status;
 }
 
   //---------------------------------------------------------------------------

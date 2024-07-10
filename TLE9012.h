@@ -36,8 +36,10 @@ SOFTWARE.
 //                          Defines for Lib Configuration
 //-----------------------------------------------------------------------------
 
-#define N_DEVICES 1 //Number of devices in the daisy chain
+#define N_DEVICES 10 //Maximum Number of devices in the daisy chain (assuming 64 byte Serial buffer)
 #define ISOUART_TIMEOUT 100 //IsoUART Timeout in Milliseconds
+#define N_MAXCELLS 12
+#define N_MAXTEMP = 5
 
 #define SOFT_MSB_FIRST //undef in case the hardware serial port can be configured to handle MSB First in Hardware
 //#define THREAD_SAFE //Uncomment if Thread safety is required -> add code to mutex lock makros for your RTOS/Scheduler
@@ -104,13 +106,22 @@ typedef enum
  */
 typedef struct
 {
-  uint8_t n_pcvm;
-  uint8_t bvm_sel;
-  uint8_t ext_temp_sel;
-  uint8_t ext_temp_r_sel;
-  uint8_t int_temp_sel;
-  uint8_t scvm_sel;
-  uint8_t stress_pcvm_sel;
+  uint16_t n_pcvm;
+  uint16_t bvm_sel;
+  uint16_t ext_temp_sel;
+  uint16_t ext_temp_r_sel;
+  uint16_t int_temp_sel;
+  uint16_t scvm_sel;
+  uint16_t stress_pcvm_sel;
+  uint8_t n_responses;
+
+  uint8_t bvm_offset;
+  uint8_t ext_temp_sel_offset;
+  uint8_t ext_temp_r_offset;
+  uint8_t int_temp_sel_offset;
+  uint8_t scvm_offset_high;
+  uint8_t scvm_offset_low;
+  uint8_t stress_pcvm_offset;
 } multiread_cfg_t;
 
 /** Data structure holding the results of a multiread operation
@@ -397,8 +408,8 @@ typedef struct
       iso_uart_status_t readRegisterBroadcast(uint16_t regaddress, uint16_t* result); //Write a broadcast to all devices in the daisy chain
       iso_uart_status_t writeRegisterBroadcast(uint16_t regaddress, uint16_t databuffer); //Read a register as broadcast from all devices in the chain
 
-      iso_uart_status_t configureMultiread(multiread_cfg_t cfg);  //Write a multiread configuration to all devices in the daisy chain
-      iso_uart_status_t multiRead(multread_result_t* databuffer); //Multiread command from all devices in the chain
+      iso_uart_status_t configureMultiread(multiread_cfg_t* cfg);  //Write a multiread configuration to all devices in the daisy chain
+      iso_uart_status_t multiRead(uint8_t nodeID, multiread_cfg_t cfg, multread_result_t* databuffer); //Multiread command for a device on the chain
     
   };
 
