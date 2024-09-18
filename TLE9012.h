@@ -31,6 +31,9 @@ SOFTWARE.
 #include <Arduino.h>
 #include <stdint.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 //-----------------------------------------------------------------------------
 //                          Defines for Lib Configuration
@@ -168,6 +171,7 @@ typedef struct
 {
   uint16_t cell_voltages[12]; /**< Array that hold up to 12 cell voltages that can be measured */
   uint16_t block_voltage; /**< Block Voltage of the complete stack */
+  int16_t bipolar_auxilary_voltage; /**< BAVM results if this mode is choosen instead of Block Voltage */
   uint16_t ntc_resistances[5]; /**< Measured NTC Resistance */
   uint8_t ntc_results_valid;
   uint16_t chiptemperature1; /**< Temperature of internal Temperature Sensor Nr. 1 */
@@ -358,6 +362,8 @@ typedef struct
       void setNumberofCells(uint8_t nodeID, uint8_t n_cells);
       void setTempSensorsConfig(uint8_t nodeID, uint8_t n_temp_sensors,ntc_config_t sensorconfig);
       void readChipTemperatures(uint8_t nodeID);
+      void setBAVMConfig(uint8_t nodeID, uint8_t bavm_status);
+      void readCellVoltagesWithBAVM(uint8_t nodeID);
 
       //Watchdog and Power state handling
       void activateSleep();
@@ -413,6 +419,8 @@ typedef struct
     
   };
 
-
+#ifdef __cplusplus
+}
+#endif
 
 #endif

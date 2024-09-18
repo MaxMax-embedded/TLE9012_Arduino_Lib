@@ -152,7 +152,7 @@ void TLE9012::wakeUp()
       deviceID = nodeID-1;
     
     writeRegisterSingle(nodeID, MEAS_CTRL, 0xEE61); //Trigger PCVM, BVM and SCVM with PBOFF
-    mcuDelay(5);
+    mcuDelay(6);
 
     for(uint8_t n = 0; n < devices[deviceID].n_cells; n++)
     {
@@ -297,6 +297,56 @@ void TLE9012::wakeUp()
     (void) writeRegisterSingle(nodeID, AVM_CONFIG, avm_sensemask);
   }
  
+  void TLE9012::setBAVMConfig(uint8_t nodeID, uint8_t bavm_status)
+  {
+    if(nodeID > N_DEVICES)
+    {
+      return; //Early return if device number is to high
+    }
+
+    uint8_t deviceID = nodeID - 1;
+
+    if(nodeID == 0)
+      deviceID = 0;
+    else
+      deviceID = nodeID-1;
+
+    if(bavm_status != 0)
+      (void) writeRegisterSingle(nodeID, AVM_CONFIG, 0x0107); //Default pulldowns and BAVM activated
+    else
+      (void) writeRegisterSingle(nodeID, AVM_CONFIG, 0x0007);
+  }
+
+  void TLE9012::readCellVoltagesWithBAVM(uint8_t nodeID)
+  {
+
+    if(nodeID > N_DEVICES)
+    {
+      return; //Early return if device number is to high
+    }
+
+    uint8_t deviceID = nodeID - 1;
+
+    if(nodeID == 0)
+      deviceID = 0;
+    else
+      deviceID = nodeID-1;
+    
+    writeRegisterSingle(nodeID, MEAS_CTRL, 0xEE61); //Trigger PCVM, BVM and SCVM with PBOFF
+    mcuDelay(6);
+
+    for(uint8_t n = 0; n < devices[deviceID].n_cells; n++)
+    {
+      (void) readRegisterSingle(nodeID, PCVM_0 + (12-devices[deviceID].n_cells + n), &devices[deviceID].cell_voltages[n]);
+    }
+
+    (void) readRegisterSingle(nodeID,BVM,(uint16_t*)&devices[deviceID].bipolar_auxilary_voltage);
+    (void) readRegisterSingle(nodeID,SCVM_HIGH,&devices[deviceID].scvm_high);
+    devices[deviceID].scvm_high &= 0xFFE0; //Remove rolling counter
+    (void) readRegisterSingle(nodeID,SCVM_LOW,&devices[deviceID].scvm_low);
+    devices[deviceID].scvm_low &= 0xFFE0; //Remove rolling counter
+  }
+
 /**
  * @brief Read the internal chip temperature of internal chiptemperature sensor 1 and 2
  * 

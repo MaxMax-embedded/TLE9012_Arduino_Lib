@@ -25,9 +25,9 @@ SOFTWARE.
 
 #include "TLE9012.h"
 
-#define N_CELLS 12
-#define TXPIN 17
-#define RXPIN 16
+#define N_CELLS 6
+#define TXPIN 10
+#define RXPIN 11
 
 TLE9012 tle9012;
 
@@ -38,8 +38,8 @@ TLE9012 tle9012;
 
 void setup() {
   
+  tle9012.init(&Serial1, 2000000,RXPIN,TXPIN); //Initialize driver with 2Mbit
 
-  tle9012.init(&Serial2, 2000000,RXPIN,TXPIN); //Initialize driver with 2Mbit
 
   Serial.begin(115200);
   Serial.println("Boot completed");
@@ -56,25 +56,34 @@ void setup() {
     Serial.println("Connection Check completed");
 
   tle9012.setNumberofCells(1, N_CELLS); //Configure the number of cells
+  tle9012.setBAVMConfig(1,1);
   tle9012.resetWatchdog(); //Reset Watchdog Timer
-
+  tle9012.clearExtendedWatchdog(1);
 }
 
 void loop() {
   
   tle9012.resetWatchdog(); //Reset Watchdog Timer
-  tle9012.readCellVoltages(1);  //Read all cell voltages from device 1
+  tle9012.readCellVoltagesWithBAVM(1);  //Read all cell voltages from device 1
 
   for(uint8_t n = 0; n < N_CELLS; n++)  //Print cell voltages to Serial Monitor
   {
     Serial.print("Cell Voltage ");
     Serial.print(n+1);
     Serial.print(": ");
-    Serial.println(ADCVALUE_TO_FLOAT_VOLTAGE(tle9012.devices[0].cell_voltages[n]));
+    Serial.println(ADCVALUE_TO_FLOAT_VOLTAGE(tle9012.devices[0].cell_voltages[n]),4);
   }
+
+  Serial.print("BAVM: ");
+  Serial.println(convertBAVMtoCurrent(tle9012.devices[0].bipolar_auxilary_voltage),5);
 
   Serial.println("-------------------------------------------------");
 
   delay(1000);
 
+}
+
+float convertBAVMtoCurrent(int16_t shuntval)
+{
+  return ((2*(float)shuntval)/32768)/0.2;
 }
