@@ -71,6 +71,7 @@ const float current_source_exp_lookup[] = {1.0, 4.0, 16.0, 64.0};
 
 
 //Define calls to Mutex Locks here
+
 #ifdef THREAD_SAFE
 #define ISOUART_LOCK()
 #define ISOUART_UNLOCK()
@@ -231,6 +232,18 @@ typedef enum
   PWM125     /**< 12.5% on time for balancing PWM */
 } tle9012_balancing_pwm_t;
 
+typedef enum
+{
+  BIT_10 = 0,
+  BIT_11,
+  BIT_12,
+  BIT_13,
+  BIT_14,
+  BIT_15,
+  BIT_16,
+  LONG,
+} tle9012_measurement_resolution_t;
+
 
 /**
  * This struct holds information about the error counter masks for the round robin cycle.
@@ -306,6 +319,7 @@ typedef struct
 } tle9012_error_callbacks_t;
 
 
+
 //-----------------------------------------------------------------------------
 //                          Class and function definitions
 //-----------------------------------------------------------------------------
@@ -364,6 +378,7 @@ typedef struct
       void readChipTemperatures(uint8_t nodeID);
       void setBAVMConfig(uint8_t nodeID, uint8_t bavm_status);
       void readCellVoltagesWithBAVM(uint8_t nodeID);
+      void readCellVoltagesWithBAVM(uint8_t nodeID, tle9012_measurement_resolution_t resolution);
 
       //Watchdog and Power state handling
       void activateSleep();

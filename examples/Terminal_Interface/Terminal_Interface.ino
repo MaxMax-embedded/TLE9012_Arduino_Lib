@@ -53,11 +53,10 @@ The following commands are implemented:\n \
  -K update_rate : Reset Watchdog every update_rate interval in milliseconds\n\
  -? Show Manual\n";
 
-HardwareSerial Console = Serial0;
 
 void setup() { 
-  Console.begin(115200); //Start Console interface
-  Console.println("Start completed");
+  Serial.begin(115200); //Start Serial interface
+  Serial.println("Start completed");
   tle9012.init(&Serial1, 2000000,RXPIN,TXPIN); //Initialize driver with 2Mbit
 }
 
@@ -91,7 +90,7 @@ void handleTerminal()
 {
 
   //Check if new data was received
-  uint8_t rx_len = Console.available();
+  uint8_t rx_len = Serial.available();
   
   //Handle overflow situations by resetting the buffer
   if((rx_len+terminalbufferrecvlen) > 64)
@@ -103,7 +102,7 @@ void handleTerminal()
   }
 
   //Read Bytes from Serial RX Buffer to terminalbuffer
-  Console.readBytes(&terminalbuffer[terminalbufferrecvlen], rx_len);
+  Serial.readBytes(&terminalbuffer[terminalbufferrecvlen], rx_len);
 
   //Check newly received data for \n end of line character
   uint8_t eol_char_found = 0;
@@ -139,15 +138,15 @@ void interpretCommand(const char commandbuffer[], uint8_t bufferlength)
 
     if(sscanf(commandbuffer,"%s",cmd)  == 1) //Read command
     {
-      Console.write(commandbuffer,bufferlength);
+      Serial.write(commandbuffer,bufferlength);
       if(!strcmp(cmd,"IL")) //Emulate IL Command (no function because no ring bus mode is supported by this library)
       {
-        Console.println("IL OK");
+        Serial.println("IL OK");
       }
 
       else if(!strcmp(cmd,"IH")) //Emulate IH Command (no function because no ring bus mode is supported by this library)
       {
-        Console.println("IH OK");
+        Serial.println("IH OK");
       }
 
       else if((strcmp(cmd,"WH") == 0) | (strcmp(cmd,"WL") == 0)) //Write data to a single register of a single device on the bus
@@ -160,25 +159,25 @@ void interpretCommand(const char commandbuffer[], uint8_t bufferlength)
           iso_uart_status_t status = tle9012.writeRegisterSingle(dev_address, reg_address, data);
           if(status == isoUART_OK)
           {
-            Console.print("WL ");
-            Console.print(" ");
-            Console.print(dev_address,HEX);
-            Console.print(" ");
-            Console.print(reg_address, HEX);
-            Console.println(" OK 8000");
+            Serial.print("WL ");
+            Serial.print(" ");
+            Serial.print(dev_address,HEX);
+            Serial.print(" ");
+            Serial.print(reg_address, HEX);
+            Serial.println(" OK 8000");
           }
           if(status == isoUART_TIMEOUT)
           {
-            Console.println("TIMEOUT");
+            Serial.println("TIMEOUT");
           }
           if(status == isoUART_CRC_ERROR)
           {
-            Console.println("CRC ERROR");
+            Serial.println("CRC ERROR");
           }
         }
         else
         {
-          Console.println("INVALID COMMAND FORMAT");
+          Serial.println("INVALID COMMAND FORMAT");
         }
       }
 
@@ -194,27 +193,27 @@ void interpretCommand(const char commandbuffer[], uint8_t bufferlength)
           iso_uart_status_t status = tle9012.readRegisterSingle_ext(&dev_address, &reg_address, &data);
           if(status == isoUART_OK)
           {
-            Console.print("RL ");
-            Console.print(dev_address,HEX);
-            Console.print(" ");
-            Console.print(reg_address,HEX);
-            Console.print(" ");
-            Console.print(data,HEX);
-            Console.print(" OK ");
-            Console.println("8000");
+            Serial.print("RL ");
+            Serial.print(dev_address,HEX);
+            Serial.print(" ");
+            Serial.print(reg_address,HEX);
+            Serial.print(" ");
+            Serial.print(data,HEX);
+            Serial.print(" OK ");
+            Serial.println("8000");
           }
           if(status == isoUART_TIMEOUT)
           {
-            Console.println("TIMEOUT");
+            Serial.println("TIMEOUT");
           }
           if(status == isoUART_CRC_ERROR)
           {
-            Console.println("CRC ERROR");
+            Serial.println("CRC ERROR");
           }
         }
         else
         {
-          Console.println("INVALID COMMAND FORMAT");
+          Serial.println("INVALID COMMAND FORMAT");
         }        
       }
 
@@ -227,26 +226,26 @@ void interpretCommand(const char commandbuffer[], uint8_t bufferlength)
           {
             watchdog_time = wd_time;
             watchdog_active = 1;
-            Console.print("Watchdog kicking time change to ");
-            Console.print(watchdog_time);
-            Console.println(" ms");
+            Serial.print("Watchdog kicking time change to ");
+            Serial.print(watchdog_time);
+            Serial.println(" ms");
           }
           else
           {
              watchdog_active = 0;
-             Console.println("Watchdog kicker deactivated");
+             Serial.println("Watchdog kicker deactivated");
           }
         }
       }
       
       else if(!strcmp(cmd,"?")) //Print Helppage
       {
-        Console.print(helppage);
+        Serial.print(helppage);
       }
       
       else //No valid command was detected
       {
-        Console.println("INVALID COMMAND");
+        Serial.println("INVALID COMMAND");
       }
 
     }

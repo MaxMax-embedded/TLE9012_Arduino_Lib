@@ -28,8 +28,9 @@ SOFTWARE.
 
 HardwareSerial* hisoUART; //Pointer to the Hardware Serial Driver
 
+static uint8_t isouartmutex = 0;
 
-
+volatile uint32_t crc_error_counter = 0;
 //-----------------------------------------------------------------------------
 //                         Initilization Functions
 //-----------------------------------------------------------------------------
@@ -347,6 +348,66 @@ void TLE9012::wakeUp()
     devices[deviceID].scvm_low &= 0xFFE0; //Remove rolling counter
   }
 
+
+  void TLE9012::readCellVoltagesWithBAVM(uint8_t nodeID, tle9012_measurement_resolution_t resolution)
+  {
+
+    if(nodeID > N_DEVICES)
+    {
+      return; //Early return if device number is to high
+    }
+
+    uint8_t deviceID = nodeID - 1;
+
+    if(nodeID == 0)
+      deviceID = 0;
+    else
+      deviceID = nodeID-1;
+    
+    uint16_t measres_cmd = 0x8861 | (resolution << 12) | (resolution << 8);
+    writeRegisterSingle(nodeID, MEAS_CTRL, measres_cmd); //Trigger PCVM, BVM and SCVM with PBOFF
+    
+    switch(resolution)
+    {
+      case BIT_10:
+        delayMicroseconds(100);
+        break;
+      case BIT_11:
+        delayMicroseconds(160);
+        break;
+      case BIT_12:
+        delayMicroseconds(300);
+        break;
+      case BIT_13:
+        delayMicroseconds(600);
+        break;
+      case BIT_14:
+        delayMicroseconds(2000);
+        break;
+      case BIT_15:
+        delayMicroseconds(3500);
+        break;
+      case BIT_16:
+        delayMicroseconds(7000);
+        break;
+      case LONG:
+        mcuDelay(6);
+        break;
+    }
+    
+
+    for(uint8_t n = 0; n < devices[deviceID].n_cells; n++)
+    {
+      (void) readRegisterSingle(nodeID, PCVM_0 + (12-devices[deviceID].n_cells + n), &devices[deviceID].cell_voltages[n]);
+    }
+
+    (void) readRegisterSingle(nodeID,BVM,(uint16_t*)&devices[deviceID].bipolar_auxilary_voltage);
+    (void) readRegisterSingle(nodeID,SCVM_HIGH,&devices[deviceID].scvm_high);
+    devices[deviceID].scvm_high &= 0xFFE0; //Remove rolling counter
+    (void) readRegisterSingle(nodeID,SCVM_LOW,&devices[deviceID].scvm_low);
+    devices[deviceID].scvm_low &= 0xFFE0; //Remove rolling counter
+  }
+
 /**
  * @brief Read the internal chip temperature of internal chiptemperature sensor 1 and 2
  * 
@@ -583,7 +644,7 @@ void TLE9012::wakeUp()
     default:
       break;
     }
-
+  return 0;
   }
 
 
@@ -1042,7 +1103,10 @@ iso_uart_status_t TLE9012::readRegisterSingle(uint8_t nodeID, uint16_t regaddres
   *result = (((uint16_t) response_buffer[6])<<8) | ((uint16_t) response_buffer[7]);
 
   if(crc != response_buffer[8])
+  {
     status = isoUART_CRC_ERROR;
+    crc_error_counter++;
+  }
 
   ISOUART_UNLOCK();
   return status;
@@ -1088,7 +1152,10 @@ iso_uart_status_t TLE9012::readRegisterSingle_ext(uint8_t* nodeID, uint16_t* reg
   *nodeID = (uint8_t) response_buffer[4];
 
   if(crc != response_buffer[8])
+  {
     status = isoUART_CRC_ERROR;
+    crc_error_counter++;
+  }
 
   ISOUART_UNLOCK();
   return status;
@@ -1139,6 +1206,7 @@ iso_uart_status_t TLE9012::writeRegisterSingle(uint8_t nodeID, uint16_t regaddre
   if(!crc3(response_buffer[6]))
   {
     status = isoUART_CRC_ERROR;
+    //crc_error_counter++;
     ISOUART_UNLOCK();
     return status;
   }
@@ -1192,7 +1260,10 @@ iso_uart_status_t TLE9012::readRegisterBroadcast(uint16_t regaddress, uint16_t* 
     uint8_t crc = crc8(&response_buffer[4+(5*n)],4);
     result[n] = (((uint16_t) response_buffer[6+(n*5)])<<8) | ((uint16_t) response_buffer[7+(n*5)]);
     if(crc != response_buffer[8+(n*5)])
+    {
       status = isoUART_CRC_ERROR;
+      crc_error_counter++;
+    }
   }
   
   ISOUART_UNLOCK();
@@ -1243,6 +1314,7 @@ iso_uart_status_t TLE9012::writeRegisterBroadcast(uint16_t regaddress, uint16_t 
   if(!crc3(response_buffer[6]))
   {
     status = isoUART_CRC_ERROR;
+    //crc_error_counter++;
     ISOUART_UNLOCK();
     return status;
   }
@@ -1325,7 +1397,10 @@ iso_uart_status_t TLE9012::multiRead(uint8_t nodeID, multiread_cfg_t cfg, multre
   {
     uint8_t crc = crc8(&response_buffer[4+(5*n)],4);
     if(crc != response_buffer[8+(n*5)])
+    {
       status = isoUART_CRC_ERROR;
+      crc_error_counter++;
+    }
       return status;
   }
 
@@ -1472,8 +1547,8 @@ void TLE9012::isoUARTWriteRequest(uint8_t nodeID, uint8_t regaddress, uint16_t d
   writebuffer[5] = crc8(writebuffer,5);
   #ifdef SOFT_MSB_FIRST
   msb_first_converter(writebuffer, 6);
-  #endif
-
+    #endif
+  hisoUART->flush();  
   hisoUART->write(writebuffer,6);
 }
 
@@ -1498,6 +1573,7 @@ void TLE9012::isoUARTReadRequest(uint8_t nodeID, uint8_t regaddress)
   #ifdef SOFT_MSB_FIRST
   msb_first_converter(writebuffer, 4);
   #endif
+  hisoUART->flush();
   hisoUART->write(writebuffer,4);
 }
 
@@ -1509,6 +1585,7 @@ void TLE9012::isoUARTClearRXBUffer()
 {
   while(hisoUART->available())
     uint8_t null = hisoUART->read();
+  //while(hisoUART->availableForWrite() < 127);
 }
 
 /**
