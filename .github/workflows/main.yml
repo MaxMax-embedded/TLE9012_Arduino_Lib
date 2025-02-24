@@ -5,7 +5,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: arduino/arduino-lint-action@v1 --library-manager update
+      - uses: arduino/arduino-lint-action@v1
         with:
-          library-manager: submit
+          library-manager: update
           compliance: strict
