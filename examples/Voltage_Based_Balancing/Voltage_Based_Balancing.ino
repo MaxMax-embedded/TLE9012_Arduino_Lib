@@ -52,7 +52,7 @@ void setup() {
 
   tle9012.setNumberofCells(1, N_CELLS); //Configure the number of cells
   tle9012.resetWatchdog(); //Reset Watchdog Timer
-  tle9012.resetErrors(); //Reset Errors
+  tle9012.resetErrors(1); //Reset Errors
 }
 
 void loop() {
